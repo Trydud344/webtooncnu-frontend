@@ -45,7 +45,10 @@ body {
   background-color: #ffffff;
 }
 
-nav-bar {
+/* Specificitate mai mare (body nav-bar) ca sa bata fallback-ul injectat
+   runtime de nav-bar.js (nav-bar{--nb-z:100}), care altfel ar ajunge dupa
+   CSS-ul din bundle si ar cobori navbarul sub blur (z 100 < 150). */
+body nav-bar {
   --nb-bg: #2a1415;
   /* tine navbarul deasupra blur-ului din continut (blur zIndex 50) */
   --nb-z: 500;

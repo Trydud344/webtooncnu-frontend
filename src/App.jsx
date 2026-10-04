@@ -92,7 +92,7 @@ export default function App() {
       ) : (
       <main className="page">
         <header className="hero hero-centered">
-          <h1 className="logo-title"><img src="/logo-v2.png" alt="WEBTOON CNU" /></h1>
+          <h1 className="logo-title"><img src="./logo-v2.png" alt="WEBTOON CNU" /></h1>
           <p className="lede">
             Locul în care tehnologia se întâlnește cu creativitatea.
           </p>
