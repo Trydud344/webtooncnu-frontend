@@ -1,0 +1,187 @@
+/* ─────────────────────────────────────────────────────────────
+   navbarting / nav-bar.css
+   Stiluri pentru <nav-bar>. Zero build, theming prin CSS vars.
+   Include-l o singura data in <head>:
+     <link rel="stylesheet" href="./navbarting/nav-bar.css">
+   Daca folosesti doar nav-bar.js (varianta standalone), CSS-ul
+   e injectat automat — fisierul asta e pentru cei care vor
+   control total / override-uri curate.
+   ───────────────────────────────────────────────────────────── */
+
+nav-bar {
+  /* Layout wrapper (host element) */
+  --nb-top: 24px;
+  --nb-z: 100;
+  --nb-side-pad: 24px;
+  --nb-bottom-pad: 24px;
+
+  /* Pila */
+  --nb-bg: #181818;
+  --nb-radius: 100px;
+  --nb-bar-pad: 6px;
+  --nb-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Highlight (pastila alba translucida care urmareste mouse-ul) */
+  --nb-highlight: rgba(255, 255, 255, 0.12);
+  --nb-highlight-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  --nb-highlight-width: 64px;
+
+  /* Text */
+  --nb-text: #ffffff;
+  --nb-text-dim: rgba(255, 255, 255, 0.65);
+  --nb-font-size: 15px;
+  --nb-font-weight: 500;
+  --nb-font-weight-active: 700;
+  --nb-item-pad: 12px 24px;
+  --nb-item-pad-collapsed: 12px 14px;
+
+  /* Minimal mode */
+  --nb-scale-minimal: 0.92;
+
+  position: sticky;
+  top: var(--nb-top);
+  z-index: var(--nb-z);
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--nb-side-pad) var(--nb-bottom-pad);
+}
+
+/* Opt-out: navbar static, nu sticky */
+nav-bar[data-sticky="false"] {
+  position: static;
+}
+
+.nb-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: var(--nb-bar-pad);
+  border-radius: var(--nb-radius);
+  will-change: transform;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Inner mask: painted above the highlight, in pill color, seated at the
+   bar edge so an expanded highlight can never show past it. */
+.nb-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--nb-bg);
+  border-radius: var(--nb-radius);
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 0.3s ease;
+}
+
+/* Minimal mode: pill is transparent, so the mask hides with it. */
+.nb-bar:has(> .nb-bg.is-minimal)::after {
+  opacity: 0;
+}
+
+.nb-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--nb-radius);
+  background: var(--nb-bg);
+  box-shadow: var(--nb-shadow);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.nb-bg.is-minimal { opacity: 0; }
+
+.nb-highlight {
+  position: absolute;
+  top: var(--nb-bar-pad);
+  height: calc(100% - (var(--nb-bar-pad) * 2));
+  width: var(--nb-highlight-width);
+  background: var(--nb-highlight);
+  border-radius: var(--nb-radius);
+  pointer-events: none;
+  box-shadow: var(--nb-highlight-shadow);
+  z-index: 1;
+  will-change: transform, left, width, opacity;
+}
+
+.nb-item {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+  padding: var(--nb-item-pad);
+  color: var(--nb-text);
+  font-size: var(--nb-font-size);
+  font-weight: var(--nb-font-weight);
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-decoration: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  will-change: padding;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.nb-item:hover { color: var(--nb-text); }
+.nb-item.active { font-weight: var(--nb-font-weight-active); }
+
+/* Stabilizator de layout: rezerva latimea bold ca sa nu "sara"
+   pastila cand un item devine activ. Nu sterge. */
+.nb-item::after {
+  content: attr(data-label);
+  display: block;
+  font-weight: var(--nb-font-weight-active);
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nb-item svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  color: inherit;
+}
+
+/* ── Teme rapide ─────────────────────────────────────────── */
+/* dark = default. light = pila alba, text negru. */
+nav-bar[data-theme="light"] {
+  --nb-bg: #f4f4f4;
+  --nb-text: #111111;
+  --nb-text-dim: rgba(0, 0, 0, 0.6);
+  --nb-highlight: rgba(0, 0, 0, 0.08);
+  --nb-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* glass = pila semi-transparenta cu blur */
+nav-bar[data-theme="glass"] {
+  --nb-bg: rgba(24, 24, 24, 0.6);
+  --nb-highlight: rgba(255, 255, 255, 0.16);
+}
+nav-bar[data-theme="glass"] .nb-bg {
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* ── Accesibilitate: focus vizibil + reduced motion ──────── */
+.nb-item:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 100px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-bg { transition: none; }
+}

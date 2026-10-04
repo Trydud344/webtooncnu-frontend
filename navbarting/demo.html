@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>navbarting — demo plug-and-play</title>
+  <!-- GSAP e OPTIONAL. Sterge linia daca nu-l vrei, navbarul merge si fara. -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <link rel="stylesheet" href="./nav-bar.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 200vh;
+      font: 500 16px/1.6 -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #323b36 0%, #6b6f5e 45%, #e8e4da 100%);
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 40px 24px 120px; }
+    main h1 { font-size: 28px; letter-spacing: -0.02em; margin-bottom: 8px; }
+    main p { color: rgba(255,255,255,.75); font-size: 14px; margin-bottom: 12px; }
+    main code { background: rgba(0,0,0,.4); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 32px; }
+    .row button {
+      background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2);
+      padding: 8px 14px; border-radius: 100px; cursor: pointer; font: inherit; font-size: 13px;
+    }
+    .row button:hover { background: rgba(255,255,255,.2); }
+  </style>
+</head>
+<body>
+  <!-- ═══ VARIANTA 1: declarativ, cu JSON in atribut (cea mai simpla) ═══ -->
+  <nav-bar
+    id="demoNav"
+    items='[
+      {"label":"home","href":"#/"},
+      {"label":"camera roll","href":"#/camera-roll"},
+      {"label":"music","href":"#/music"},
+      {"label":"guestbook","href":"#/guestbook"}
+    ]'
+    routing="hash"
+  ></nav-bar>
+
+  <main>
+    <h1>navbarting — demo</h1>
+    <p>Scroll in jos: pila se strange (minimal mode). Hover pe ea: se extinde la loc.</p>
+    <p>Highlight-ul magnetic urmareste mouse-ul. Fundalul trece de la inchis la deschis ca sa vezi contrastul automat (text alb → negru).</p>
+
+    <div class="row">
+      <button onclick="setTheme('dark')">theme: dark</button>
+      <button onclick="setTheme('light')">theme: light</button>
+      <button onclick="setTheme('glass')">theme: glass</button>
+      <button onclick="toggleMagnetic()">toggle magnetic</button>
+      <button onclick="addItem()">+ add item (JS API)</button>
+    </div>
+
+    <p>Evenimente: deschide DevTools → Console si da click pe navbar. Vei vedea <code>nb:navigate</code>.</p>
+    <p style="margin-top:60vh">Zona deschisa ⬇ — aici contrastul face textul negru in minimal mode.</p>
+    <p style="margin-top:60vh">Gata. Sus ai vazut toate starile.</p>
+  </main>
+
+  <script src="./nav-bar.js"></script>
+  <script>
+    const nav = document.getElementById('demoNav');
+
+    // Eveniment plug-and-play
+    nav.addEventListener('nb:navigate', (e) => console.log('[navbarting] navigate:', e.detail));
+
+    // JS API
+    function setTheme(t) {
+      if (t === 'dark') nav.removeAttribute('data-theme');
+      else nav.setAttribute('data-theme', t);
+    }
+    function toggleMagnetic() {
+      const cur = nav.getAttribute('magnetic') !== 'false';
+      nav.setAttribute('magnetic', String(!cur));
+      location.reload(); // magnetic se citeste la mount; pentru demo, reload e ok
+    }
+    let n = 0;
+    function addItem() {
+      n++;
+      nav.setItems([
+        { label: 'home', href: '#/' },
+        { label: 'camera roll', href: '#/camera-roll' },
+        { label: 'music', href: '#/music' },
+        { label: 'guestbook', href: '#/guestbook' },
+        { label: 'extra ' + n, href: '#/extra-' + n },
+      ]);
+    }
+
+    // Varianta 2 (JS pur, fara HTML declarativ) — decomenteaza ca sa testezi:
+    // NavBar.create(document.body, {
+    //   items: [{ label: 'home', href: '/' }],
+    //   routing: 'off',
+    //   onNavigate: ({ href }) => console.log('go', href),
+    // });
+  </script>
+</body>
+</html>

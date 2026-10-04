@@ -1,0 +1,20 @@
+{
+  "name": "@local/navbarting",
+  "version": "1.0.0",
+  "description": "Navbar pill reutilizabil (Web Component zero-deps, GSAP optional). Plug-and-play pe orice site.",
+  "type": "module",
+  "main": "./nav-bar.js",
+  "module": "./modules/config.js",
+  "files": [
+    "nav-bar.js",
+    "nav-bar.css",
+    "modules/",
+    "wrappers/",
+    "demo.html",
+    "README.md"
+  ],
+  "keywords": ["navbar", "web-component", "plug-and-play", "pill-nav"],
+  "license": "MIT",
+  "peerDependencies": {},
+  "peerDependenciesMeta": {}
+}
