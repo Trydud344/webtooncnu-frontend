@@ -4,31 +4,39 @@ import '../navbarting/nav-bar.css'
 import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
 import Evenimente from './pages/Evenimente.jsx'
+import { VIEWS, parseRoute, canonicalFor } from './router.js'
 
-const ITEMS = [
-  { label: 'acasa', href: '/acasa' },
-  { label: 'evenimente', href: '/evenimente' },
-  { label: 'editii', href: '/editii' },
-  { label: 'galerie', href: '/galerie' },
-  { label: 'resurse', href: '/resurse' },
-  { label: 'contact', href: '/contact' },
-]
+const ITEMS = VIEWS.filter((v) => v !== 'login').map((v) => ({ label: v, href: `/${v}` }))
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
   // Legat de pozitia de scroll, NU de hover-ul navbarului — ca sa nu intre in loop cu el.
   const [atTop, setAtTop] = useState(true)
-  // Vedere curenta: landing, evenimente, login sau placeholder pentru
-  // taburile inca nemutate (doar frontend, fara router)
-  const [view, setView] = useState('acasa')
+  // Vedere curenta: sincronizata cu URL-ul (history API, hosting static).
+  // Navbarul e routing="off" (doar emite), URL-ul e construit aici.
+  const [view, setView] = useState(() => parseRoute(window.location.pathname).view)
+
+  const navigate = (next) => {
+    setView(next)
+    const url = canonicalFor(next, window.location.pathname)
+    if (window.location.pathname !== url) window.history.pushState(null, '', url)
+  }
 
   const go = (detail) => {
-    const map = { '/acasa': 'acasa', '/evenimente': 'evenimente' }
-    if (detail && map[detail.href]) setView(map[detail.href])
-    else if (detail && ITEMS.some((i) => i.href === detail.href))
-      setView(detail.href.slice(1))
-    else setView('acasa')
+    const href = detail && detail.href
+    if (href && VIEWS.includes(href.slice(1))) navigate(href.slice(1))
+    else navigate('acasa')
   }
+
+  // La incarcare: normalizeaza URL-ul (/prefix/ -> /prefix/acasa, taie
+  // trailing slash). Back/forward din browser -> resincronizeaza vederea.
+  useEffect(() => {
+    const { canonical } = parseRoute(window.location.pathname)
+    if (window.location.pathname !== canonical) window.history.replaceState(null, '', canonical)
+    const onPop = () => setView(parseRoute(window.location.pathname).view)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -56,7 +64,7 @@ export default function App() {
           (!atTop ? ' is-hidden' : '') +
           (view === 'login' ? ' is-active' : '')
         }
-        onClick={() => setView(view === 'login' ? 'acasa' : 'login')}
+        onClick={() => navigate(view === 'login' ? 'acasa' : 'login')}
       >
         <span>log in</span>
       </button>
@@ -76,7 +84,7 @@ export default function App() {
       {/* evenimente isi gestioneaza propriul fade pe grid; fara fade global la incarcare */}
       <div key={view} className={view === 'evenimente' ? undefined : 'view-enter'}>
       {view === 'login' ? (
-        <Login onBack={() => setView('acasa')} />
+        <Login onBack={() => navigate('acasa')} />
       ) : view === 'evenimente' ? (
         <Evenimente />
       ) : view !== 'acasa' ? (

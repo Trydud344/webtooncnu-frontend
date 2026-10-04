@@ -24,7 +24,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node scripts/check-routing.mjs
       - run: npm run build
+      # Fallback SPA: rutele /acasa, /evenimente, ... servesc aplicatia
+      # la accesare directa / refresh (Pages returneaza 404.html pe cai necunoscute)
+      - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
