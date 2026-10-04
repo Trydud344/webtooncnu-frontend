@@ -777,9 +777,14 @@
             } catch (e) {}
           } else if (name === 'active') {
             setActivePath(this._nb, this.getAttribute('active'));
+          } else if (name === 'routing') {
+            // Wrapperul React seteaza atributele imperativ dupa mount;
+            // fara asta, opts.routing ramanea 'history' si click-ul dadea
+            // pushState pe href-ul absolut (/acasa -> radacina domeniului).
+            this._nb.opts.routing = this.getAttribute('routing') || 'history';
           }
         }
-        static get observedAttributes() { return ['items', 'active']; }
+        static get observedAttributes() { return ['items', 'active', 'routing']; }
       }
       window.customElements.define(TAG, NavBarEl);
     }
