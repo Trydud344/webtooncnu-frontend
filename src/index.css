@@ -88,6 +88,60 @@ body nav-bar {
   transition: opacity 0.3s ease;
 }
 
+.platforma-btn {
+  right: auto;
+  left: 24px;
+}
+
+.platforma-add-button {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 50%;
+  background: #2a1415;
+  color: #ffffff;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font-family: inherit;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.platforma-add-button:hover {
+  background: #3a1d1f;
+}
+
+.platforma-properties-button {
+  right: auto;
+  left: 24px;
+  padding: 0;
+}
+
+.platforma-properties-glyph {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.platforma-add-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .login-btn:hover {
   background: #3a1d1f;
 }

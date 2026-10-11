@@ -4,9 +4,10 @@ import '../navbarting/nav-bar.css'
 import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
 import Evenimente from './pages/Evenimente.jsx'
+import PlatformaCanvas from './pages/PlatformaCanvas.jsx'
 import { VIEWS, parseRoute, canonicalFor } from './router.js'
 
-const ITEMS = VIEWS.filter((v) => v !== 'login').map((v) => ({ label: v, href: `/${v}` }))
+const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'platforma').map((v) => ({ label: v, href: `/${v}` }))
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
@@ -43,11 +44,21 @@ export default function App() {
   }, [view])
 
   useEffect(() => {
+    document.title = view === 'platforma'
+      ? ''
+      : 'WebToonCNU — Concurs interjudetean de benzi desenate'
+  }, [view])
+
+  useEffect(() => {
     const onScroll = () => setAtTop(window.scrollY < 1)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  if (view === 'platforma') {
+    return <PlatformaCanvas />
+  }
 
   return (
     <div className={view === 'login' ? 'no-nav-highlight' : undefined}>
@@ -57,6 +68,17 @@ export default function App() {
         active={view === 'login' ? '/login' : `/${view}`}
         onEvent={go}
       />
+      <button
+        type="button"
+        className={
+          'login-btn platforma-btn' +
+          (!atTop ? ' is-hidden' : '') +
+          (view === 'platforma' ? ' is-active' : '')
+        }
+        onClick={() => navigate(view === 'platforma' ? 'acasa' : 'platforma')}
+      >
+        <span>Platforma</span>
+      </button>
       <button
         type="button"
         className={
