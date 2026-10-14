@@ -6,6 +6,7 @@
 
 :root {
   --bg: #6f1a1f;
+  --surface: #2a1415;
   --ink: #f4f0f0;
   --accent: #ffd7d9;
   --accent-soft: #ffecec;
@@ -49,7 +50,7 @@ body {
    runtime de nav-bar.js (nav-bar{--nb-z:100}), care altfel ar ajunge dupa
    CSS-ul din bundle si ar cobori navbarul sub blur (z 100 < 150). */
 body nav-bar {
-  --nb-bg: #2a1415;
+  --nb-bg: var(--surface);
   /* tine navbarul deasupra blur-ului din continut (blur zIndex 50) */
   --nb-z: 500;
   isolation: isolate;
@@ -70,7 +71,7 @@ body nav-bar {
   top: 24px;
   right: 24px;
   z-index: 500;
-  background: #2a1415;
+  background: var(--surface);
   color: #ffffff;
   font-family: inherit;
   font-size: 15px;
@@ -102,39 +103,29 @@ body nav-bar {
   place-items: center;
   width: 60px;
   height: 60px;
-  padding: 0 0 4px;
+  /* No optical nudge: the glyph is an SVG, so it is centred by geometry rather
+     than by whatever the platform's font does with a `+` character. */
+  padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #2a1415;
+  background: var(--surface);
   color: #ffffff;
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.3),
     0 1px 3px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  font-family: inherit;
-  font-size: 34px;
-  font-weight: 400;
-  line-height: 1;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
+.platforma-add-glyph {
+  width: 30px;
+  height: 30px;
+  stroke: currentColor;
+}
+
 .platforma-add-button:hover {
   background: #3a1d1f;
-}
-
-.platforma-properties-button {
-  right: auto;
-  left: 24px;
-  padding: 0;
-}
-
-.platforma-properties-glyph {
-  width: 22px;
-  height: 22px;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
 }
 
 .platforma-add-button:focus-visible {

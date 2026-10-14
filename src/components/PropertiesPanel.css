@@ -1,0 +1,400 @@
+/* The properties panel. Collapsed it is a round surface holding the glyph; open
+   it grows into the full box. One element carries both states, so the collapsed
+   button and the open panel can never disagree about size. */
+.properties-panel {
+  /* Space the counter and the pager reserve, and the height the page content is
+     masked and padded by so nothing ever sits under them. */
+  --properties-bar: 48px;
+  --properties-inset: 20px;
+  --properties-fade: linear-gradient(to bottom, transparent, #000 var(--properties-bar), #000 calc(100% - var(--properties-bar)), transparent);
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 500;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  /* Same lift as the add button and the widget menu. */
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  transition:
+    width 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    height 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 200ms ease;
+}
+
+.properties-panel:not(.is-open):hover {
+  background: #3a1d1f;
+}
+
+.properties-panel.is-open {
+  width: min(304px, calc(100vw - 48px));
+  height: min(468px, calc(100dvh - 48px));
+  border-radius: 22px;
+}
+
+.properties-toggle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transition: opacity 140ms ease 220ms, visibility 0s 220ms;
+}
+
+.properties-toggle svg {
+  width: 22px;
+  height: 22px;
+}
+
+.properties-toggle:focus-visible {
+  /* Inset: the panel clips anything drawn outside the collapsed circle. */
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: 50%;
+}
+
+.properties-panel.is-open .properties-toggle {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 0s;
+}
+
+/* Hidden, not just transparent: a closed panel must not take keyboard focus. */
+.properties-content {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 130ms ease, visibility 0s 130ms;
+}
+
+.properties-panel.is-open .properties-content {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 170ms ease 150ms, visibility 0s;
+}
+
+/* Counter and pager float over the pages on their own fade, so properties slide
+   under the text and dissolve instead of colliding with it. */
+.properties-count {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: var(--properties-bar);
+  margin: 0;
+  background: linear-gradient(var(--surface) 45%, transparent);
+  color: rgba(244, 240, 240, 0.68);
+  font-size: 0.78rem;
+  /* Centres the single line in the bar without a flex box, which would drop the
+     space between the count and the label from the rendered text. */
+  line-height: var(--properties-bar);
+  text-align: center;
+  pointer-events: none;
+}
+
+.properties-count strong {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.properties-pager {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--properties-bar);
+  padding: 0 8px;
+  background: linear-gradient(transparent, var(--surface) 45%);
+  font-size: 0.72rem;
+}
+
+.properties-pager span {
+  flex: 1;
+  color: rgba(244, 240, 240, 0.55);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* Horizontal pager. Scroll-snap does the sliding, so a trackpad swipe settles
+   onto the next page without any JS; the arrows scroll the same strip. */
+.properties-pages {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.properties-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.properties-page {
+  display: grid;
+  flex: 0 0 100%;
+  align-content: start;
+  gap: 22px;
+  min-width: 0;
+  /* The extra 8px is breathing room under the counter: the fade ends at the bar,
+     so the first control must start below it. */
+  padding: calc(var(--properties-bar) + 8px) var(--properties-inset) var(--properties-bar);
+  overflow-x: clip;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  scrollbar-width: none;
+  -webkit-mask-image: var(--properties-fade);
+  mask-image: var(--properties-fade);
+}
+
+.properties-page::-webkit-scrollbar {
+  display: none;
+}
+
+/* Control vocabulary: plain controls, no boxes, no pills. */
+
+.properties-icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 236, 236, 0.7);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.properties-icon-button svg {
+  width: var(--properties-icon, 16px);
+  height: var(--properties-icon, 16px);
+}
+
+.properties-icon-button:hover:not(:disabled) {
+  color: var(--heading);
+}
+
+.properties-icon-button:disabled {
+  opacity: 0.26;
+  cursor: default;
+}
+
+.properties-icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.properties-close {
+  --properties-icon: 15px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.properties-arrow {
+  --properties-icon: 18px;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+}
+
+/* Every panel field — dropdown, number, search — is the same underline. */
+.properties-field {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.properties-field:focus-visible {
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+.properties-field::placeholder {
+  color: rgba(244, 240, 240, 0.35);
+}
+
+select.properties-field {
+  cursor: pointer;
+}
+
+/* The spinner is a light box that fights the transparent underline field; arrow
+   keys still step the value. */
+.properties-field[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.properties-field[type="number"]::-webkit-outer-spin-button,
+.properties-field[type="number"]::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.properties-field option {
+  color: #000;
+}
+
+/* A field that needs a name, since a bare number does not say what it is. */
+.properties-field-group {
+  display: grid;
+  gap: 8px;
+}
+
+.properties-label {
+  color: rgba(244, 240, 240, 0.55);
+  font-size: 0.72rem;
+}
+
+.properties-slider {
+  display: grid;
+  gap: 8px;
+}
+
+.properties-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(244, 240, 240, 0.72);
+  font-size: 0.8rem;
+}
+
+.properties-slider-head output {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.properties-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.properties-slider-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  background: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.properties-slider-row input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.properties-reset {
+  --properties-icon: 13px;
+  width: 22px;
+  height: 22px;
+}
+
+/* The reset glyph is the smallest icon in the panel, so it needs a heavier stroke
+   to read at 13px. */
+.properties-reset svg {
+  stroke-width: 2.2;
+}
+
+/* B / I / U: pressed reads as accent color, nothing else. */
+.properties-styles {
+  display: flex;
+  gap: 20px;
+}
+
+.properties-styles button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(244, 240, 240, 0.62);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.properties-styles button:hover {
+  color: var(--heading);
+}
+
+.properties-styles button[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.properties-styles button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.properties-styles .is-italic {
+  font-style: italic;
+}
+
+.properties-styles .is-underline {
+  text-decoration: underline;
+}
+
+.properties-colorful {
+  display: grid;
+  gap: 10px;
+}
+
+.properties-colorful .w-color-colorful {
+  --sketch-background: var(--surface);
+  width: 100% !important;
+}
+
+/* The picker hardcodes its corner radii inline, so match it with !important.
+   Only the root and the track roots carry a radius: a plain descendant selector
+   would also square the round drag handles. */
+.properties-colorful > .w-color-colorful,
+.properties-colorful > .w-color-colorful > .w-color-colorful {
+  border-radius: 0 !important;
+}
+
+.properties-color {
+  margin: 0;
+  color: rgba(244, 240, 240, 0.45);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .properties-panel,
+  .properties-toggle,
+  .properties-content {
+    transition: none;
+  }
+
+  .properties-pages {
+    scroll-behavior: auto;
+  }
+}

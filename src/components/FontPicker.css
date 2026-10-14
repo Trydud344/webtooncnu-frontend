@@ -1,0 +1,91 @@
+/* The picker reuses `.properties-field` for its fallback dropdown; the rest is
+   the search field and the virtualized list. */
+.font-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.font-picker-search {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.font-picker-search::placeholder {
+  color: rgba(244, 240, 240, 0.35);
+}
+
+.font-picker-search:focus-visible {
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+.font-picker-list {
+  display: grid;
+  gap: 1px;
+  max-height: 208px;
+  overflow-y: auto;
+  overflow-x: clip;
+  scrollbar-width: none;
+  /* Only the bottom edge: a fade at the top would wash out the sticky separator. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+}
+
+.font-picker-list::-webkit-scrollbar {
+  display: none;
+}
+
+.font-picker-group {
+  display: grid;
+  gap: 1px;
+}
+
+.font-picker-separator {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 0 4px;
+  background: var(--surface);
+  color: rgba(244, 240, 240, 0.42);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.font-picker-option {
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.font-picker-option:hover {
+  color: var(--heading);
+}
+
+.font-picker-option.is-active {
+  color: var(--accent);
+}
+
+.font-picker-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.font-picker-status {
+  margin: 0;
+  color: rgba(244, 240, 240, 0.45);
+  font-size: 0.72rem;
+}

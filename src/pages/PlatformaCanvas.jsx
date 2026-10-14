@@ -1,5 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import { Colorful } from '@uiw/react-color'
+import FontPicker from '../components/FontPicker'
+import PropertiesPanel, { PropertySlider } from '../components/PropertiesPanel'
+import TextWidgetEditor from '../components/TextWidgetEditor'
+import { ensureFullFont, fontStack } from '../fonts'
 import './PlatformaCanvas.css'
 
 const OPTIONS = [
@@ -15,235 +20,7 @@ const PHOTO_FIT_OPTIONS = [
   { value: 'fill', label: 'Stretch', description: 'Stretch to the exact widget size' },
   { value: 'none', label: 'Original', description: 'Original size, centered without scaling' },
 ]
-const FONT_OPTIONS = [
-  { value: 'default', label: 'Default', stack: undefined, weights: [], styles: [] },
-  { value: 'Inter', label: 'Inter', stack: "'Inter', system-ui, sans-serif", weights: [400, 700], styles: ['normal', 'italic'] },
-  { value: 'Playfair Display', label: 'Playfair Display', stack: "'Playfair Display', Georgia, serif", weights: [400, 700], styles: ['normal', 'italic'] },
-  { value: 'Space Mono', label: 'Space Mono', stack: "'Space Mono', ui-monospace, monospace", weights: [400, 700], styles: ['normal', 'italic'] },
-  { value: 'Caveat', label: 'Caveat', stack: "'Caveat', cursive", weights: [400, 700], styles: ['normal'] },
-  { value: 'Silkscreen', label: 'Silkscreen', stack: "'Silkscreen', monospace", weights: [400, 700], styles: ['normal'] },
-]
-const FONT_CATEGORY_FALLBACK = {
-  'sans-serif': 'sans-serif',
-  serif: 'serif',
-  display: 'sans-serif',
-  handwriting: 'cursive',
-  monospace: 'monospace',
-}
-const POPULAR_FONTS = [
-  'Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Poppins', 'Playfair Display',
-  'DM Sans', 'Nunito', 'Lato', 'Oswald', 'Raleway', 'Ubuntu', 'Merriweather',
-  'Bebas Neue', 'Caveat', 'Space Mono', 'JetBrains Mono', 'Fira Sans', 'Lora', 'PT Sans',
-]
-const FONT_PRELOAD_BATCH = 120
 
-let fontCatalogCache = null
-let fontCatalogPromise = null
-
-function loadFontCatalog() {
-  if (fontCatalogCache) return Promise.resolve(fontCatalogCache)
-  if (!fontCatalogPromise) {
-    fontCatalogPromise = fetch('https://api.fontsource.org/v1/fonts')
-      .then((response) => {
-        if (!response.ok) throw new Error('Font list failed')
-        return response.json()
-      })
-      .then((fonts) => {
-        const popularRank = new Map(POPULAR_FONTS.map((family, index) => [family, index]))
-        fontCatalogCache = fonts
-          .filter((font) => font.type !== 'icons' && font.category !== 'icons')
-          .map((font) => ({
-            family: font.family,
-            category: font.category,
-            weights: font.weights,
-            styles: font.styles,
-          }))
-          .sort((a, b) => (popularRank.get(a.family) ?? Infinity) - (popularRank.get(b.family) ?? Infinity)
-            || a.family.localeCompare(b.family))
-        return fontCatalogCache
-      })
-      .catch((error) => {
-        fontCatalogPromise = null
-        throw error
-      })
-  }
-  return fontCatalogPromise
-}
-
-function googleFamilyParam(family) {
-  return family.split(' ').map(encodeURIComponent).join('+')
-}
-
-function fullFontUrl(entry) {
-  const weights = entry?.weights?.length ? entry.weights : [400, 700]
-  const base = weights.includes(400) ? 400 : weights[0]
-  const picked = weights.includes(700) && 700 !== base ? [base, 700] : [base]
-  const family = googleFamilyParam(entry?.family || 'Inter')
-  if (entry?.styles?.includes('italic')) {
-    return `https://fonts.googleapis.com/css2?family=${family}:ital,wght@${picked.map((weight) => `0,${weight};1,${weight}`).join(';')}&display=swap`
-  }
-  return `https://fonts.googleapis.com/css2?family=${family}:wght@${picked.join(';')}&display=swap`
-}
-
-const fullFontsLoaded = new Set()
-const previewQueue = []
-
-function ensureFullFont(family) {
-  if (!family || family === 'default' || fullFontsLoaded.has(family)) return
-  fullFontsLoaded.add(family)
-  const entry = (fontCatalogCache || []).find((font) => font.family === family)
-    || FONT_OPTIONS.find((option) => option.value === family)
-    || { family, weights: [400, 700], styles: [] }
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = fullFontUrl(entry)
-  document.head.appendChild(link)
-}
-
-function fontStack(family) {
-  if (!family || family === 'default') return undefined
-  const preset = FONT_OPTIONS.find((option) => option.value === family)
-  if (preset?.stack) return preset.stack
-  const entry = (fontCatalogCache || []).find((font) => font.family === family)
-  return `'${family}', ${FONT_CATEGORY_FALLBACK[entry?.category] || 'sans-serif'}`
-}
-
-function FontPicker({ value, onChange }) {
-  const [fonts, setFonts] = useState(() => fontCatalogCache)
-  const [failed, setFailed] = useState(false)
-  const [query, setQuery] = useState('')
-  const listRef = useRef(null)
-
-  useEffect(() => {
-    if (fontCatalogCache) return
-    let cancelled = false
-    loadFontCatalog()
-      .then((list) => { if (!cancelled) setFonts(list) })
-      .catch(() => { if (!cancelled) setFailed(true) })
-    return () => { cancelled = true }
-  }, [])
-
-  const filtered = useMemo(() => {
-    if (!fonts) return []
-    const needle = query.trim().toLowerCase()
-    return fonts.filter((font) => !needle || font.family.toLowerCase().includes(needle))
-  }, [fonts, query])
-  const groups = useMemo(() => {
-    const order = ['sans-serif', 'serif', 'display', 'handwriting', 'monospace', 'other']
-    return order
-      .map((name) => ({ name, fonts: filtered.filter((font) => font.category === name) }))
-      .filter((group) => group.fonts.length)
-  }, [filtered])
-
-  useEffect(() => {
-    const list = listRef.current
-    if (!list || !fonts) return
-    const queued = new Set()
-    let timer = null
-    const flush = () => {
-      timer = null
-      if (!queued.size) return
-      queued.forEach((family) => {
-        const index = previewQueue.indexOf(family)
-        if (index !== -1) previewQueue.splice(index, 1)
-        previewQueue.push(family)
-      })
-      queued.clear()
-      while (previewQueue.length > FONT_PRELOAD_BATCH) previewQueue.shift()
-      let link = document.getElementById('font-preview-link')
-      if (!link) {
-        link = document.createElement('link')
-        link.id = 'font-preview-link'
-        link.rel = 'stylesheet'
-        document.head.appendChild(link)
-      }
-      const chars = new Set('0123456789')
-      previewQueue.forEach((family) => family.split('').forEach((char) => chars.add(char)))
-      const families = previewQueue.map((family) => `family=${googleFamilyParam(family)}`).join('&')
-      link.href = `https://fonts.googleapis.com/css2?${families}&text=${encodeURIComponent([...chars].join(''))}&display=swap`
-    }
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return
-        const family = entry.target.getAttribute('data-font-family')
-        if (family && !previewQueue.includes(family)) queued.add(family)
-      })
-      if (queued.size && !timer) timer = setTimeout(flush, 300)
-    }, { root: list, rootMargin: '120px' })
-    list.querySelectorAll('[data-font-family]').forEach((element) => observer.observe(element))
-    if (value && value !== 'default' && !previewQueue.includes(value)) {
-      queued.add(value)
-      if (!timer) timer = setTimeout(flush, 300)
-    }
-    return () => {
-      observer.disconnect()
-      if (timer) clearTimeout(timer)
-    }
-  }, [filtered, fonts, value])
-
-  if (failed) {
-    return (
-      <select
-        className="properties-photo-fit-select"
-        value={value || 'default'}
-        aria-label="Font"
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {FONT_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    )
-  }
-
-  if (!fonts) return <p>Loading fonts…</p>
-
-  return (
-    <div className="font-picker">
-      <input
-        className="font-picker-search"
-        type="search"
-        placeholder="Search 2,000+ fonts…"
-        aria-label="Search fonts"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
-      <div className="font-picker-list" ref={listRef} role="listbox" aria-label="Fonts">
-        <button
-          type="button"
-          role="option"
-          aria-selected={value === 'default'}
-          className={`font-picker-option${value === 'default' ? ' is-active' : ''}`}
-          onClick={() => onChange('default')}
-        >
-          Default
-        </button>
-        {groups.map((group) => (
-          <div key={group.name} className="font-picker-group">
-            <div className="font-picker-separator" aria-hidden="true">
-              {group.name[0].toUpperCase() + group.name.slice(1)}
-            </div>
-            {group.fonts.map((font) => (
-              <button
-                key={font.family}
-                type="button"
-                role="option"
-                aria-selected={value === font.family}
-                data-font-family={font.family}
-                className={`font-picker-option${value === font.family ? ' is-active' : ''}`}
-                style={{ fontFamily: `'${font.family}', ${FONT_CATEGORY_FALLBACK[font.category] || 'sans-serif'}` }}
-                onClick={() => onChange(font.family)}
-              >
-                {font.family}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-      <p className="font-picker-hint">{filtered.length} fonts · previews load as you scroll</p>
-    </div>
-  )
-}
 const GRID_PITCH = 6
 const GRID_COLUMNS = 64
 const GRID_VISIBLE_ROWS = 40
@@ -251,7 +28,18 @@ const GRID_VIRTUAL_WIDTH = GRID_COLUMNS * GRID_PITCH
 const GRID_VIRTUAL_HEIGHT = GRID_VISIBLE_ROWS * GRID_PITCH
 const MIN_WIDGET_WIDTH = 8
 const MIN_WIDGET_HEIGHT = 8
+// Gutter around every widget, in grid units. Applied as a margin so the grid
+// tracks themselves stay `gap: 0` and the col/row pixel math is unchanged.
+const DEFAULT_WIDGET_GAP = 2
+const DEFAULT_WIDGET_RADIUS = 6
+// Ranges for the Appearance sliders.
+const WIDGET_GAP_INPUT = { min: 0, max: 6, step: 1 }
+const WIDGET_RADIUS_INPUT = { min: 0, max: 20, step: 1 }
 const SPACER_THICKNESS = 16
+const DEFAULT_BG_COLOR = '#050505'
+// Below this the canvas, the panel and the add button stop fitting together.
+const MIN_VIEWPORT_WIDTH = 640
+const MIN_VIEWPORT_HEIGHT = 420
 const GRID_WIDGET_SIZES = {
   compact: { columns: 16, rows: 12 },
   standard: { columns: 20, rows: 16 },
@@ -266,21 +54,14 @@ function viewportInfo() {
   const isMobile = /Android|iPhone|iPod|iPad|Mobile/i.test(userAgent)
     || (navigator.maxTouchPoints > 1 && Math.min(width, height) < 760)
 
-  return {
-    width,
-    height,
-    screenWidth: window.screen.width,
-    screenHeight: window.screen.height,
-    isMobile,
-  }
+  return { width, height, isMobile }
 }
 
+// Any window with room for the canvas plus the panel and the add button is fair
+// game, whatever its shape: the stage is scaled to fit the space it is given.
 function incompatibilityFor(viewport) {
   if (viewport.isMobile) return 'mobile'
-  if (viewport.width < 1024 || viewport.height < 640) return 'small'
-
-  const screenRatio = viewport.screenWidth / viewport.screenHeight
-  if (Math.abs(screenRatio - 16 / 10) > 0.08) return 'resolution'
+  if (viewport.width < MIN_VIEWPORT_WIDTH || viewport.height < MIN_VIEWPORT_HEIGHT) return 'small'
   return null
 }
 
@@ -752,30 +533,23 @@ function moveAnchoredGroup(widgets, rootId) {
 
 export default function PlatformaCanvas() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [viewport, setViewport] = useState(viewportInfo)
   const [widgets, setWidgets] = useState([])
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [draggingIds, setDraggingIds] = useState([])
   const [selectionBox, setSelectionBox] = useState(null)
   const [holdingSize, setHoldingSize] = useState(null)
-  const [dropFlash, setDropFlash] = useState(null)
+  const [widgetGap, setWidgetGap] = useState(DEFAULT_WIDGET_GAP)
+  const [widgetRadius, setWidgetRadius] = useState(DEFAULT_WIDGET_RADIUS)
   const incompatibility = incompatibilityFor(viewport)
   const stageWidth = Math.max(0, Math.min(viewport.width - 48, (viewport.height - 48) * GRID_COLUMNS / GRID_VISIBLE_ROWS))
   const stageHeight = stageWidth * GRID_VISIBLE_ROWS / GRID_COLUMNS
   const stageScale = stageWidth / GRID_VIRTUAL_WIDTH
   const plusRef = useRef(null)
-  const propertiesMorphRef = useRef(null)
-  const propertiesGlyphRef = useRef(null)
-  const propertiesContentRef = useRef(null)
-  const propertiesCloseRef = useRef(null)
-  const propertiesTimelineRef = useRef(null)
-  const propertiesOpenRef = useRef(false)
   const optionRefs = useRef([])
   const stageRef = useRef(null)
   const widgetRefs = useRef({})
   const dragRef = useRef(null)
-  const dropFlashKeyRef = useRef(0)
   const selectionDragRef = useRef(null)
   const resizeRef = useRef(null)
   const flipOriginRef = useRef(null)
@@ -802,8 +576,6 @@ export default function PlatformaCanvas() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-
-  useEffect(() => () => propertiesTimelineRef.current?.kill(), [])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -1015,56 +787,6 @@ export default function PlatformaCanvas() {
     }
   }
 
-  const toggleProperties = (event) => {
-    const isOpening = !propertiesOpenRef.current
-    const openedByKeyboard = isOpening && event?.detail === 0
-    propertiesOpenRef.current = isOpening
-    setPropertiesOpen(isOpening)
-
-    propertiesTimelineRef.current?.kill()
-    const morph = propertiesMorphRef.current
-    const glyph = propertiesGlyphRef.current
-    const content = propertiesContentRef.current
-    if (!morph || !glyph || !content) return
-
-    const width = isOpening ? Math.min(320, window.innerWidth - 48) : 60
-    const height = isOpening ? Math.min(520, window.innerHeight - 48) : 60
-    const duration = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0.01 : 0.48
-    if (isOpening) {
-      gsap.set(content, { autoAlpha: 0, y: 10 })
-    }
-    const timeline = gsap.timeline({
-      onComplete: () => {
-        if (!isOpening) {
-          gsap.set(morph, { clearProps: 'width,height,borderRadius' })
-          morph.focus()
-        } else if (openedByKeyboard) {
-          propertiesCloseRef.current?.focus()
-        }
-      },
-    })
-    timeline.to(morph, {
-      width,
-      height,
-      borderRadius: isOpening ? 20 : 30,
-      duration,
-      ease: 'power3.inOut',
-    }, 0)
-    timeline.to(glyph, {
-      autoAlpha: isOpening ? 0 : 1,
-      scale: isOpening ? 0.8 : 1,
-      duration: duration * 0.35,
-      ease: 'power2.out',
-    }, isOpening ? duration * 0.12 : duration * 0.55)
-    timeline.to(content, {
-      autoAlpha: isOpening ? 1 : 0,
-      y: isOpening ? 0 : 10,
-      duration: duration === 0.01 ? 0.01 : isOpening ? 0.18 : 0.16,
-      ease: isOpening ? 'power2.out' : 'power2.in',
-    }, isOpening ? duration : 0)
-    propertiesTimelineRef.current = timeline
-  }
-
   const pasteImageIntoWidget = async (widget) => {
     setWidgets((current) => current.map((item) => item.id === widget.id
       ? { ...item, isPasting: true, pasteStatus: '' }
@@ -1227,8 +949,8 @@ export default function PlatformaCanvas() {
       others: widgets.filter((item) => item.id !== widget.id && !connectedIds.has(item.id)),
     }
     element.classList.add('is-resizing')
-    element.style.width = `${size.columns * GRID_PITCH}px`
-    element.style.height = `${size.rows * GRID_PITCH}px`
+    element.style.width = `${size.columns * GRID_PITCH - 2 * widgetGap}px`
+    element.style.height = `${size.rows * GRID_PITCH - 2 * widgetGap}px`
     setHoldingSize(widget.size || 'standard')
   }
 
@@ -1247,8 +969,8 @@ export default function PlatformaCanvas() {
     resize.width = size.columns
     resize.height = size.rows
     resize.moved = true
-    resize.element.style.width = `${size.columns * GRID_PITCH}px`
-    resize.element.style.height = `${size.rows * GRID_PITCH}px`
+    resize.element.style.width = `${size.columns * GRID_PITCH - 2 * widgetGap}px`
+    resize.element.style.height = `${size.rows * GRID_PITCH - 2 * widgetGap}px`
   }
 
   const moveResize = (event, widget) => {
@@ -1421,18 +1143,6 @@ export default function PlatformaCanvas() {
     })
     flipOriginRef.current = captureWidgetRects()
     drag.elements.forEach((element) => gsap.set(element, { clearProps: 'transform,zIndex' }))
-    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      const point = pointOnGrid(event)
-      const size = widgetDimensions(widget)
-      dropFlashKeyRef.current += 1
-      setDropFlash({
-        key: dropFlashKeyRef.current,
-        x: point.x,
-        y: point.y,
-        width: size.columns * GRID_PITCH,
-        height: size.rows * GRID_PITCH,
-      })
-    }
 
     const displayPitch = GRID_PITCH * stageScale
     const targetColDelta = Math.round((event.clientX - drag.startX) / displayPitch)
@@ -1501,11 +1211,15 @@ export default function PlatformaCanvas() {
       : null
     : null
 
+  // The field's value is the size in px; clearing it means "auto", which is the
+  // widget-size-driven size the CSS variable provides.
   const setFontSizeForSelected = (value) => {
+    const size = Number(value)
+    const fontSize = value.trim() === '' || !Number.isFinite(size) || size <= 0 ? undefined : size
     if (!selectedTextWidgets.length) return
     const ids = new Set(selectedTextWidgets.map((item) => item.id))
     setWidgets((current) => current.map((item) => ids.has(item.id)
-      ? { ...item, fontSize: value === 'auto' ? undefined : Number(value) }
+      ? { ...item, fontSize }
       : item))
   }
 
@@ -1563,6 +1277,189 @@ export default function PlatformaCanvas() {
     setFontForSelected(value)
   }
 
+  const bgWidgets = selectedWidgets.filter((item) => item.kind === 'text' || item.kind === 'photo')
+  const activeBgColor = bgWidgets.length
+    ? bgWidgets.every((item) => (item.bgColor || DEFAULT_BG_COLOR) === (bgWidgets[0].bgColor || DEFAULT_BG_COLOR))
+      ? (bgWidgets[0].bgColor || DEFAULT_BG_COLOR)
+      : null
+    : null
+
+  const setBgColorForSelected = (value) => {
+    if (!bgWidgets.length) return
+    const ids = new Set(bgWidgets.map((item) => item.id))
+    setWidgets((current) => current.map((item) => ids.has(item.id)
+      ? { ...item, bgColor: value === DEFAULT_BG_COLOR ? undefined : value }
+      : item))
+  }
+
+  const hasText = selectedTextWidgets.length > 0
+  const hasPhoto = selectedPhotoWidgets.length > 0
+
+  // Pages are built conditionally so the pager always matches the current selection.
+  // Each page is one concern; the pager label names it, so nothing inside repeats it.
+  const pages = []
+  if (bgWidgets.length > 0) {
+    pages.push({
+      id: 'colors',
+      label: 'colors',
+      content: (
+        <div
+          className="properties-colorful"
+          role="group"
+          aria-label="Background color and opacity"
+        >
+          <Colorful
+            color={activeBgColor || DEFAULT_BG_COLOR}
+            onChange={(color) => setBgColorForSelected(color.hexa)}
+            style={{ width: '100%' }}
+          />
+          <p className="properties-color">
+            {activeBgColor === null ? 'Mixed' : activeBgColor.toUpperCase()}
+          </p>
+        </div>
+      ),
+    })
+  }
+  if (hasPhoto) {
+    pages.push({
+      id: 'image',
+      label: 'image',
+      content: (
+        <select
+          id="photo-fit-select"
+          className="properties-field"
+          value={activePhotoFit || ''}
+          aria-label="Image scaling"
+          onChange={(event) => setPhotoFitForSelected(event.target.value)}
+        >
+          {activePhotoFit === null && (
+            <option value="" disabled>Mixed…</option>
+          )}
+          {PHOTO_FIT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value} title={option.description}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ),
+    })
+  }
+  if (hasText) {
+    pages.push({
+      id: 'text',
+      label: 'text',
+      content: (
+        <>
+          <select
+            id="text-align-select"
+            className="properties-field"
+            value={activeTextAlign || ''}
+            aria-label="Text alignment"
+            onChange={(event) => setTextAlignForSelected(event.target.value)}
+          >
+            {activeTextAlign === null && (
+              <option value="" disabled>Mixed…</option>
+            )}
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+          <select
+            id="text-vertical-align-select"
+            className="properties-field"
+            value={activeVerticalAlign || ''}
+            aria-label="Vertical alignment"
+            onChange={(event) => setVerticalAlignForSelected(event.target.value)}
+          >
+            {activeVerticalAlign === null && (
+              <option value="" disabled>Mixed…</option>
+            )}
+            <option value="top">Top</option>
+            <option value="middle">Middle</option>
+            <option value="bottom">Bottom</option>
+          </select>
+          <div className="properties-styles" role="group" aria-label="Text style">
+            <button
+              type="button"
+              aria-pressed={allBold}
+              aria-label="Bold"
+              onClick={() => toggleTextStyleForSelected('bold')}
+            >
+              B
+            </button>
+            <button
+              className="is-italic"
+              type="button"
+              aria-pressed={allItalic}
+              aria-label="Italic"
+              onClick={() => toggleTextStyleForSelected('italic')}
+            >
+              I
+            </button>
+            <button
+              className="is-underline"
+              type="button"
+              aria-pressed={allUnderline}
+              aria-label="Underline"
+              onClick={() => toggleTextStyleForSelected('underline')}
+            >
+              U
+            </button>
+          </div>
+        </>
+      ),
+    })
+    pages.push({
+      id: 'font',
+      label: 'font',
+      content: (
+        <>
+          <FontPicker value={activeFont || 'default'} onChange={handleFontChange} />
+          <div className="properties-field-group">
+            <label className="properties-label" htmlFor="text-font-size-input">font size</label>
+            <input
+              id="text-font-size-input"
+              className="properties-field"
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              placeholder={activeFontSize === null ? 'mixed' : 'auto'}
+              value={activeFontSize === null || activeFontSize === 'auto' ? '' : String(activeFontSize)}
+              onChange={(event) => setFontSizeForSelected(event.target.value)}
+            />
+          </div>
+        </>
+      ),
+    })
+  }
+
+  // Canvas-wide look, so it stays available even with nothing selected.
+  pages.push({
+    id: 'appearance',
+    label: 'appearance',
+    content: (
+      <>
+        <PropertySlider
+          id="widget-padding-slider"
+          label="Widget padding"
+          value={widgetGap}
+          defaultValue={DEFAULT_WIDGET_GAP}
+          input={WIDGET_GAP_INPUT}
+          onChange={setWidgetGap}
+        />
+        <PropertySlider
+          id="widget-radius-slider"
+          label="Corner radius"
+          value={widgetRadius}
+          defaultValue={DEFAULT_WIDGET_RADIUS}
+          input={WIDGET_RADIUS_INPUT}
+          onChange={setWidgetRadius}
+        />
+      </>
+    ),
+  })
+
   return (
     <div className={`platforma-canvas${incompatibility ? ' is-incompatible' : ''}`}>
       {incompatibility ? (
@@ -1570,16 +1467,12 @@ export default function PlatformaCanvas() {
           <h1>
             {incompatibility === 'mobile'
               ? 'This page is not compatible with mobile.'
-              : incompatibility === 'small'
-                ? 'This window is too small for the page.'
-                : 'This page is not compatible with your screen resolution.'}
+              : 'This window is too small for the page.'}
           </h1>
           <p>
             {incompatibility === 'mobile'
               ? 'Open Platforma on a desktop display.'
-              : incompatibility === 'small'
-                ? 'Use a desktop window at least 1024 × 640 pixels.'
-                : 'Platforma requires a display close to a 16:10 aspect ratio.'}
+              : `Use a window at least ${MIN_VIEWPORT_WIDTH} × ${MIN_VIEWPORT_HEIGHT} pixels.`}
           </p>
         </div>
       ) : (
@@ -1597,6 +1490,8 @@ export default function PlatformaCanvas() {
                 '--snap-dot-offset': `${-GRID_PITCH / 2}px`,
                 '--snap-dot-radius': `${1.8 / stageScale}px`,
                 '--snap-dot-cutoff': `${2 / stageScale}px`,
+                '--widget-gap': `${widgetGap}px`,
+                '--widget-radius': `${widgetRadius}px`,
                 width: `${GRID_VIRTUAL_WIDTH}px`,
                 minHeight: `${GRID_VIRTUAL_HEIGHT}px`,
                 transform: `scale(${stageScale})`,
@@ -1612,23 +1507,9 @@ export default function PlatformaCanvas() {
                 aria-hidden="true"
                 style={{
                   width: `${(GRID_COLUMNS + 1) * GRID_PITCH}px`,
-                  height: `${GRID_VIRTUAL_HEIGHT}px`,
+                  height: `${GRID_VIRTUAL_HEIGHT + GRID_PITCH}px`,
                 }}
               />
-              {dropFlash && (
-                <div
-                  key={dropFlash.key}
-                  className="drop-flash"
-                  aria-hidden="true"
-                  style={{
-                    left: `${dropFlash.x - dropFlash.width / 2}px`,
-                    top: `${dropFlash.y - dropFlash.height / 2}px`,
-                    width: `${dropFlash.width}px`,
-                    height: `${dropFlash.height}px`,
-                  }}
-                  onAnimationEnd={() => setDropFlash((current) => (current?.key === dropFlash.key ? null : current))}
-                />
-              )}
               {selectionBox && (
                 <div
                   className="selection-marquee"
@@ -1653,6 +1534,7 @@ export default function PlatformaCanvas() {
                   : verticalSpacer
                     ? 'Vertical spacer'
                     : `${widget.kind} widget`
+                const widgetBackground = isSpacer ? undefined : (widget.bgColor || DEFAULT_BG_COLOR)
                 return (
                   <div
                     key={widget.id}
@@ -1670,6 +1552,7 @@ export default function PlatformaCanvas() {
                       '--widget-text-inset': `${8 / stageScale}px`,
                       '--text-widget-font-size': `${Math.max(4, Math.min(28, Math.sqrt(size.columns * size.rows) * GRID_PITCH * 0.045))}px`,
                       '--selection-ring-width': `${1.5 / stageScale}px`,
+                      ...(widgetBackground ? { backgroundColor: widgetBackground } : null),
                       gridColumn: `${widget.col + 1} / span ${size.columns}`,
                       gridRow: `${widget.row + 1} / span ${size.rows}`,
                     }}
@@ -1685,22 +1568,9 @@ export default function PlatformaCanvas() {
                       <span className="widget-spacer-label" aria-hidden="true">{widgetLabel}</span>
                     )}
                     {widget.kind === 'text' && (
-                      <div
-                        className="text-widget-body"
-                        style={{
-                          justifyContent: widget.verticalAlign === 'middle'
-                            ? 'center'
-                            : widget.verticalAlign === 'bottom'
-                              ? 'flex-end'
-                              : 'flex-start',
-                        }}
-                      >
-                      <textarea
-                        className="text-widget-editor"
-                        aria-label="Text widget content"
-                        placeholder="Write something…"
+                      <TextWidgetEditor
                         value={widget.text || ''}
-                        spellCheck="true"
+                        align={widget.verticalAlign}
                         style={{
                           ...(widget.fontSize ? { fontSize: `${widget.fontSize}px` } : null),
                           textAlign: widget.textAlign || 'left',
@@ -1710,64 +1580,77 @@ export default function PlatformaCanvas() {
                           fontFamily: fontStack(widget.font),
                         }}
                         onPointerDown={(event) => selectWidgetFromContent(event, widget)}
-                        onChange={(event) => {
-                          const text = event.target.value
-                          setWidgets((current) => current.map((item) => item.id === widget.id
-                            ? { ...item, text }
-                            : item))
-                        }}
+                        onChange={(text) => setWidgets((current) => current.map((item) => item.id === widget.id
+                          ? { ...item, text }
+                          : item))}
                       />
-                      </div>
                     )}
                     {widget.kind === 'photo' && (
-                      <div className="photo-widget-content">
+                      <div
+                        className="photo-widget-content"
+                        style={widgetBackground ? { backgroundColor: widgetBackground } : undefined}
+                      >
                         {widget.imageSrc ? (
-                          <img
-                            className="photo-widget-image"
-                            src={widget.imageSrc}
-                            alt=""
-                            draggable="false"
-                            style={{ objectFit: widget.photoFit || 'contain' }}
-                            onLoad={(event) => {
-                              const { naturalWidth, naturalHeight } = event.currentTarget
-                              if (!naturalWidth || !naturalHeight) return
-                              setWidgets((current) => current.map((item) => item.id === widget.id
-                                && item.imageSrc === widget.imageSrc
-                                ? { ...item, imageAspect: naturalWidth / naturalHeight, pasteStatus: '' }
-                                : item))
-                            }}
-                            onError={() => {
-                              setWidgets((current) => current.map((item) => item.id === widget.id
-                                && item.imageSrc === widget.imageSrc
-                                ? { ...item, imageAspect: null, pasteStatus: 'This image could not be loaded.' }
-                                : item))
-                            }}
-                          />
+                          <>
+                            <img
+                              className="photo-widget-image"
+                              src={widget.imageSrc}
+                              alt=""
+                              draggable="false"
+                              style={{ objectFit: widget.photoFit || 'contain' }}
+                              onLoad={(event) => {
+                                const { naturalWidth, naturalHeight } = event.currentTarget
+                                if (!naturalWidth || !naturalHeight) return
+                                setWidgets((current) => current.map((item) => item.id === widget.id
+                                  && item.imageSrc === widget.imageSrc
+                                  ? { ...item, imageAspect: naturalWidth / naturalHeight, pasteStatus: '' }
+                                  : item))
+                              }}
+                              onError={() => {
+                                setWidgets((current) => current.map((item) => item.id === widget.id
+                                  && item.imageSrc === widget.imageSrc
+                                  ? { ...item, imageAspect: null, pasteStatus: 'This image could not be loaded.' }
+                                  : item))
+                              }}
+                            />
+                            <div className="photo-widget-controls" onPointerDown={(event) => selectWidgetFromContent(event, widget)}>
+                              <button
+                                className="photo-widget-button"
+                                type="button"
+                                aria-label="Paste image from clipboard"
+                                disabled={widget.isPasting}
+                                title="Paste an image file or image link from your clipboard"
+                                onClick={() => pasteImageIntoWidget(widget)}
+                              >
+                                {widget.isPasting ? 'Pasting…' : 'Paste image'}
+                              </button>
+                              <button
+                                className="photo-widget-button"
+                                type="button"
+                                aria-label="Resize widget to match image aspect ratio"
+                                disabled={!widget.imageAspect || widget.isPasting}
+                                title="Resize this widget to the closest grid shape for the image, near its current size"
+                                onClick={() => fitImageAspect(widget)}
+                              >
+                                Ratio
+                              </button>
+                            </div>
+                          </>
                         ) : (
-                          <span className="photo-widget-empty">Paste an image or image link</span>
-                        )}
-                        <div className="photo-widget-controls" onPointerDown={(event) => selectWidgetFromContent(event, widget)}>
+                          /* Nothing to paste over yet: the paste action is the whole
+                             widget, so it sits in the middle instead of a corner. */
                           <button
-                            className="photo-widget-button"
+                            className="photo-widget-paste"
                             type="button"
                             aria-label="Paste image from clipboard"
                             disabled={widget.isPasting}
                             title="Paste an image file or image link from your clipboard"
+                            onPointerDown={(event) => selectWidgetFromContent(event, widget)}
                             onClick={() => pasteImageIntoWidget(widget)}
                           >
                             {widget.isPasting ? 'Pasting…' : 'Paste image'}
                           </button>
-                          <button
-                            className="photo-widget-button"
-                            type="button"
-                            aria-label="Resize widget to match image aspect ratio"
-                            disabled={!widget.imageAspect || widget.isPasting}
-                            title="Resize this widget to the closest grid shape for the image, near its current size"
-                            onClick={() => fitImageAspect(widget)}
-                          >
-                            Ratio
-                          </button>
-                        </div>
+                        )}
                         {widget.pasteStatus && (
                           <span className="photo-widget-status" role="status" aria-live="polite">
                             {widget.pasteStatus}
@@ -1783,7 +1666,16 @@ export default function PlatformaCanvas() {
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => deleteWidget(widget.id)}
                     >
-                      <span aria-hidden="true">×</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 5 19 19M19 5 5 19" />
+                      </svg>
                     </button>
                     <button
                       className="widget-resize-handle"
@@ -1810,13 +1702,6 @@ export default function PlatformaCanvas() {
             </div>
           </div>
 
-          {selectedIds.size > 0 && (
-            <div className="selection-status" role="status" aria-live="polite">
-              <strong>{selectedIds.size} selected</strong>
-              <span>Shift-click to toggle · drag empty canvas to select · drag a selected widget to move the group · Esc clears</span>
-            </div>
-          )}
-
       <div
         id="widget-menu"
         className="widget-menu"
@@ -1842,167 +1727,7 @@ export default function PlatformaCanvas() {
         ))}
       </div>
 
-      <div className="properties-panel-shell">
-        <button
-          ref={propertiesMorphRef}
-          className="properties-panel-morph"
-          type="button"
-          aria-label={propertiesOpen ? 'Properties panel' : 'Open properties'}
-          aria-expanded={propertiesOpen}
-          aria-controls="properties-panel-content"
-          title={propertiesOpen ? 'Properties panel' : 'Open properties'}
-          onClick={toggleProperties}
-        >
-          <svg ref={propertiesGlyphRef} className="platforma-properties-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 7h5m4 0h7M4 17h9m4 0h3" />
-            <circle cx="11" cy="7" r="2" />
-            <circle cx="15" cy="17" r="2" />
-          </svg>
-        </button>
-        <section
-          ref={propertiesContentRef}
-          id="properties-panel-content"
-          className="properties-panel-content"
-          aria-hidden={!propertiesOpen}
-          aria-label="Properties for selected elements"
-        >
-          <div className="properties-panel-scroll">
-          <header className="properties-panel-header">
-            <div>
-              <h2>Properties</h2>
-              <p>For selected elements</p>
-            </div>
-            <button
-              ref={propertiesCloseRef}
-              className="properties-panel-close"
-              type="button"
-              aria-label="Close properties panel"
-              onClick={toggleProperties}
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          </header>
-          <div className="properties-selection-count" aria-live="polite">
-            <strong>{selectedIds.size}</strong>
-            <span>{selectedIds.size === 1 ? 'element selected' : 'elements selected'}</span>
-          </div>
-          {selectedPhotoWidgets.length > 0 && (
-            <div className="properties-section">
-              <h3>Image scaling</h3>
-              {selectedPhotoWidgets.length > 1 && (
-                <p>{`Applies to ${selectedPhotoWidgets.length} photo widgets.`}</p>
-              )}
-              <select
-                id="photo-fit-select"
-                className="properties-photo-fit-select"
-                value={activePhotoFit || ''}
-                aria-label="Image scaling"
-                onChange={(event) => setPhotoFitForSelected(event.target.value)}
-              >
-                {activePhotoFit === null && (
-                  <option value="" disabled>Mixed…</option>
-                )}
-                {PHOTO_FIT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value} title={option.description}>
-                    {option.label} — {option.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {selectedTextWidgets.length > 0 && (
-            <div className="properties-section">
-              <h3>Text</h3>
-              {selectedTextWidgets.length > 1 && (
-                <p>{`Applies to ${selectedTextWidgets.length} text widgets.`}</p>
-              )}
-              <select
-                id="text-font-size-select"
-                className="properties-photo-fit-select"
-                value={activeFontSize === null ? '' : String(activeFontSize)}
-                aria-label="Font size"
-                onChange={(event) => setFontSizeForSelected(event.target.value)}
-              >
-                {activeFontSize === null && (
-                  <option value="" disabled>Mixed…</option>
-                )}
-                <option value="auto">Auto — fits the widget size</option>
-                {[8, 10, 12, 14, 16, 20, 24, 32].map((fontSize) => (
-                  <option key={fontSize} value={String(fontSize)}>{fontSize}px</option>
-                ))}
-              </select>
-              <select
-                id="text-align-select"
-                className="properties-photo-fit-select"
-                value={activeTextAlign || ''}
-                aria-label="Text alignment"
-                onChange={(event) => setTextAlignForSelected(event.target.value)}
-              >
-                {activeTextAlign === null && (
-                  <option value="" disabled>Mixed…</option>
-                )}
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-              <FontPicker value={activeFont || 'default'} onChange={handleFontChange} />
-              <select
-                id="text-vertical-align-select"                className="properties-photo-fit-select"
-                value={activeVerticalAlign || ''}
-                aria-label="Vertical alignment"
-                onChange={(event) => setVerticalAlignForSelected(event.target.value)}
-              >
-                {activeVerticalAlign === null && (
-                  <option value="" disabled>Mixed…</option>
-                )}
-                <option value="top">Top</option>
-                <option value="middle">Middle</option>
-                <option value="bottom">Bottom</option>
-              </select>
-              <div className="properties-style-row" role="group" aria-label="Text style">
-                <button
-                  className="properties-style-toggle"
-                  type="button"
-                  aria-pressed={allBold}
-                  aria-label="Bold"
-                  title="Bold"
-                  onClick={() => toggleTextStyleForSelected('bold')}
-                >
-                  B
-                </button>
-                <button
-                  className="properties-style-toggle is-italic"
-                  type="button"
-                  aria-pressed={allItalic}
-                  aria-label="Italic"
-                  title="Italic"
-                  onClick={() => toggleTextStyleForSelected('italic')}
-                >
-                  I
-                </button>
-                <button
-                  className="properties-style-toggle is-underline"
-                  type="button"
-                  aria-pressed={allUnderline}
-                  aria-label="Underline"
-                  title="Underline"
-                  onClick={() => toggleTextStyleForSelected('underline')}
-                >
-                  U
-                </button>
-              </div>
-            </div>
-          )}
-          {selectedPhotoWidgets.length === 0 && selectedTextWidgets.length === 0 && (
-            <p className="properties-panel-placeholder">
-              {selectedWidgets.length > 0
-                ? 'Select a photo or text widget to change its properties.'
-                : 'Property controls will appear here.'}
-            </p>
-          )}
-          </div>
-        </section>
-      </div>
+      <PropertiesPanel count={selectedIds.size} pages={pages} />
 
       <button
         className="platforma-add-button"
@@ -2012,7 +1737,18 @@ export default function PlatformaCanvas() {
         aria-controls="widget-menu"
         onClick={() => setMenuOpen((open) => !open)}
       >
-        <span ref={plusRef} className="platforma-add-glyph" aria-hidden="true">+</span>
+        <svg
+          ref={plusRef}
+          className="platforma-add-glyph"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M12 4v16M4 12h16" />
+        </svg>
       </button>
         </>
       )}

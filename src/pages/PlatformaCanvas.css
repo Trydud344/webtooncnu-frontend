@@ -44,227 +44,6 @@
   overscroll-behavior: none;
 }
 
-.properties-panel-shell {
-  position: fixed;
-  left: 24px;
-  bottom: 24px;
-  z-index: 500;
-  width: 60px;
-  height: 60px;
-  pointer-events: none;
-}
-
-.properties-panel-morph {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  z-index: 0;
-  display: grid;
-  place-items: center;
-  width: 60px;
-  height: 60px;
-  padding: 0;
-  border: 0;
-  border-radius: 30px;
-  background: #2a1415;
-  color: #ffffff;
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.3),
-    0 1px 3px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  overflow: hidden;
-  pointer-events: auto;
-  transform-origin: bottom left;
-  transition: background-color 0.2s ease;
-}
-
-.properties-panel-morph:hover {
-  background: #3a1d1f;
-}
-
-.properties-panel-morph[aria-expanded="false"]:focus-visible,
-.properties-panel-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.properties-panel-morph[aria-expanded="true"] {
-  border: 0;
-  box-shadow: none;
-  outline: none;
-}
-
-.properties-panel-content {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  width: min(320px, calc(100vw - 48px));
-  height: min(520px, calc(100dvh - 48px));
-  padding: 26px 24px;
-  border-bottom: 0;
-  border-radius: 20px;
-  color: #ffffff;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(10px);
-  pointer-events: auto;
-  overflow: hidden;
-}
-
-.properties-panel-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: clip;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 215, 217, 0.28) transparent;
-}
-
-.properties-panel-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-
-.properties-panel-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.properties-panel-scroll::-webkit-scrollbar-thumb {
-  border-radius: 8px;
-  background: rgba(255, 215, 217, 0.22);
-}
-
-.properties-panel-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 215, 217, 0.42);
-}
-
-.properties-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.properties-panel-header h2 {
-  margin: 0;
-  color: #fff4f4;
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.properties-panel-header p {
-  margin: 5px 0 0;
-  color: rgba(244, 240, 240, 0.58);
-  font-size: 0.78rem;
-}
-
-.properties-panel-close {
-  display: grid;
-  flex: 0 0 34px;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin: -4px -4px 0 0;
-  padding: 0;
-  border: 1px solid rgba(255, 215, 217, 0.22);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 236, 236, 0.9);
-  font: inherit;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: background-color 140ms ease, border-color 140ms ease;
-}
-
-.properties-panel-close:hover {
-  border-color: rgba(255, 215, 217, 0.42);
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.properties-panel-close span {
-  transform: translateY(-1px);
-}
-
-.properties-selection-count {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: fit-content;
-  margin-top: 28px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 215, 217, 0.18);
-  border-radius: 100px;
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(255, 236, 236, 0.72);
-  font-size: 0.8rem;
-}
-
-.properties-selection-count strong {
-  color: var(--accent);
-  font-size: 1rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.properties-panel-placeholder {
-  display: grid;
-  flex: 1;
-  place-items: center;
-  margin: 24px 0 0;
-  color: rgba(244, 240, 240, 0.42);
-  font-size: 0.82rem;
-  text-align: center;
-}
-
-.properties-section {
-  margin-top: 24px;
-  display: grid;
-  gap: 10px;
-}
-
-.properties-section h3 {
-  margin: 0;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
-}
-
-.properties-section p {
-  margin: 0;
-  color: rgba(244, 240, 240, 0.58);
-  font-size: 0.78rem;
-  line-height: 1.5;
-}
-
-.properties-photo-fit-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 215, 217, 0.18);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(255, 236, 236, 0.9);
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
-.properties-photo-fit-select:hover {
-  border-color: rgba(255, 215, 217, 0.42);
-}
-
-.properties-photo-fit-select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.properties-photo-fit-select option {
-  color: #000;
-}
-
 .masonry-grid {
   position: relative;
   isolation: isolate;
@@ -312,40 +91,27 @@
   pointer-events: none;
 }
 
-.drop-flash {
-  position: absolute;
-  z-index: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 215, 217, 0.55) 0%, rgba(255, 215, 217, 0) 70%);
-  pointer-events: none;
-  animation: drop-flash-fade 0.45s ease-out forwards;
-}
-
-@keyframes drop-flash-fade {
-  from {
-    opacity: 0.9;
-    transform: scale(0.6);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.25);
-  }
-}
-
 .canvas-widget {
   position: relative;
   z-index: 1;
-  width: 100%;
-  height: 100%;
+  /* Sized by the grid track (stretch) minus the inset, so neighbouring widgets
+     always keep a gutter. The grid itself stays gap-free: every snap/drag
+     calculation is plain col/row * pitch, and a real gap would break it. */
+  width: auto;
+  height: auto;
+  margin: var(--widget-gap, 2px);
   min-width: 0;
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.045);
-  border-radius: 6px;
+  border-radius: var(--widget-radius, 6px);
   background: #050505;
   cursor: grab;
   touch-action: none;
   user-select: none;
-  transition: box-shadow 140ms ease-out;
+  /* The selection ring and the lift fade in and out slowly: picking a widget up
+     should feel like a light coming up, not a snap. Dragging keeps its own
+     instant transition below, so the shadow still tracks the pointer. */
+  transition: box-shadow 650ms cubic-bezier(0.33, 0, 0.15, 1);
 }
 
 .canvas-widget:focus-visible {
@@ -358,6 +124,8 @@
 }
 
 .text-widget-editor {
+  /* The standalone rule is the fallback; inside .text-widget-body the editor is
+     in flow and TextWidgetEditor.jsx sizes it to its content. */
   position: absolute;
   inset: var(--widget-text-inset, 3px);
   z-index: 1;
@@ -376,6 +144,7 @@
   user-select: text;
 }
 
+/* Widget-sized box that positions the editor vertically. */
 .text-widget-body {
   position: absolute;
   inset: var(--widget-text-inset, 3px);
@@ -384,143 +153,14 @@
   flex-direction: column;
 }
 
+/* Grown to its content by JS, capped here at the widget: text fills the widget
+   and only scrolls once it genuinely does not fit. `flex: none` keeps that
+   measured height instead of stretching the box to the wrapper. */
 .text-widget-body .text-widget-editor {
   position: static;
   flex: none;
   width: 100%;
   max-height: 100%;
-}
-
-.properties-style-row {
-  display: flex;
-  gap: 6px;
-}
-
-.properties-style-toggle {
-  flex: 1;
-  min-height: 34px;
-  padding: 6px 0;
-  border: 1px solid rgba(255, 215, 217, 0.18);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(255, 236, 236, 0.9);
-  font: inherit;
-  font-weight: 700;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.properties-style-toggle.is-italic {
-  font-style: italic;
-}
-
-.properties-style-toggle.is-underline {
-  text-decoration: underline;
-}
-
-.properties-style-toggle:hover {
-  border-color: rgba(255, 215, 217, 0.42);
-}
-
-.properties-style-toggle[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: rgba(255, 215, 217, 0.14);
-  color: #ffffff;
-}
-
-.font-picker {
-  display: grid;
-  gap: 8px;
-}
-
-.font-picker-search {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 215, 217, 0.18);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(255, 236, 236, 0.9);
-  font: inherit;
-  font-size: 0.82rem;
-}
-
-.font-picker-search:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.font-picker-list {
-  display: grid;
-  gap: 2px;
-  max-height: 190px;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 215, 217, 0.28) transparent;
-}
-
-.font-picker-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.font-picker-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.font-picker-list::-webkit-scrollbar-thumb {
-  border-radius: 8px;
-  background: rgba(255, 215, 217, 0.22);
-}
-
-.font-picker-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 215, 217, 0.42);
-}
-
-.font-picker-group {
-  display: grid;
-  gap: 2px;
-}
-
-.font-picker-separator {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 8px 10px 6px;
-  border-bottom: 1px solid rgba(255, 215, 217, 0.14);
-  background: #2a1415;
-  color: rgba(255, 236, 236, 0.5);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.font-picker-option {
-  padding: 7px 10px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: rgba(255, 236, 236, 0.9);
-  font-size: 1rem;
-  line-height: 1.3;
-  text-align: left;
-  cursor: pointer;
-}
-
-.font-picker-option:hover {
-  border-color: rgba(255, 215, 217, 0.25);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.font-picker-option.is-active {
-  border-color: var(--accent);
-  background: rgba(255, 215, 217, 0.1);
-}
-
-.font-picker-hint {
-  margin: 0;
-  color: rgba(244, 240, 240, 0.45);
-  font-size: 0.72rem;
 }
 
 .text-widget-editor::placeholder {
@@ -546,20 +186,50 @@
   user-select: none;
 }
 
-.photo-widget-empty {
+/* Empty photo widget: the paste action is the only thing to do, so it sits in the
+   middle of the widget as a pill. */
+.photo-widget-paste {
   position: absolute;
-  inset: 0 auto auto 0;
-  width: var(--widget-display-width, 100%);
-  height: var(--widget-display-height, 100%);
-  display: grid;
-  place-items: center;
-  padding: 48px 12px 12px;
-  color: rgba(244, 240, 240, 0.48);
-  font-size: 0.78rem;
-  text-align: center;
-  pointer-events: none;
+  /* Centred by layout (`inset: 0` + `margin: auto`), not by a translate: with
+     `left: 50%` the shrink-to-fit width would be capped at half the widget and the
+     label would ellipsise. */
+  inset: 0;
+  width: fit-content;
+  height: fit-content;
+  max-width: 100%;
+  margin: auto;
+  padding: 6px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 215, 217, 0.45);
+  border-radius: 100px;
+  background: rgba(42, 20, 21, 0.94);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  touch-action: manipulation;
+  /* Scaled about its own centre, so it keeps the same on-screen size as the
+     widget's other controls at any stage scale. */
   transform: scale(var(--widget-ui-scale, 1));
-  transform-origin: top left;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.photo-widget-paste:not(:disabled):hover {
+  border-color: rgba(255, 215, 217, 0.75);
+  background: #3a1d1f;
+}
+
+.photo-widget-paste:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.photo-widget-paste:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .photo-widget-controls {
@@ -682,14 +352,9 @@
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid rgba(255, 215, 217, 0.28);
-  border-radius: 50%;
-  background: rgba(42, 20, 21, 0.96);
+  border: 0;
+  background: none;
   color: #ffffff;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -699,12 +364,14 @@
   transition:
     opacity 140ms ease,
     visibility 0s linear 140ms,
-    background-color 140ms ease,
-    border-color 140ms ease;
+    color 140ms ease;
 }
 
-.widget-delete-button span {
-  transform: translateY(-1px);
+/* Bare SVG at currentColor: geometry rather than a text `×`, so it stays centred
+   on every platform's font. The 22px box is the hit area, not a circle. */
+.widget-delete-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .canvas-widget:hover .widget-delete-button,
@@ -716,8 +383,7 @@
 }
 
 .widget-delete-button:hover {
-  border-color: rgba(255, 215, 217, 0.58);
-  background: #6f1a1f;
+  color: var(--accent);
 }
 
 .widget-delete-button:focus-visible {
@@ -778,39 +444,6 @@
   align-items: flex-end;
   gap: 10px;
   pointer-events: none;
-}
-
-.selection-status {
-  position: fixed;
-  top: 18px;
-  left: 50%;
-  z-index: 501;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 215, 217, 0.24);
-  border-radius: 100px;
-  background: rgba(42, 20, 21, 0.94);
-  color: rgba(255, 236, 236, 0.84);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
-  font-size: 0.75rem;
-  line-height: 1.3;
-  transform: translateX(-50%);
-  pointer-events: none;
-  backdrop-filter: blur(12px);
-}
-
-.selection-status strong {
-  color: #ffffff;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.selection-status span {
-  text-align: center;
 }
 
 .widget-menu[aria-hidden="false"] {
@@ -879,12 +512,8 @@
   font-size: 0.76rem;
 }
 
-.platforma-add-glyph {
-  display: block;
-  line-height: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .canvas-widget,
   .snap-dot-grid {
     transition: none;
   }
@@ -907,11 +536,6 @@
   .platforma-add-button {
     right: 18px;
     bottom: 18px;
-  }
-
-  .platforma-add-button.platforma-properties-button {
-    right: auto;
-    left: 18px;
   }
 }
 
