@@ -53,6 +53,16 @@
 
 ## Canvas polish (platforma)
 
+- The resize control is a bare corner grip instead of an 18px circle with a border,
+  a background and an L-shaped mark inside it: three diagonal strokes drawn by an
+  SVG at `currentColor`, brightest at the corner and tapering outwards, with a 24px
+  hit area. It reads as part of the widget the way the delete `×` does, and turns
+  `--accent` while hovered or while the widget is being resized.
+- Fixed with it: on a vertical spacer the grip and the delete `×` were both pinned
+  to the top-right and drawn on top of each other. The grip is now bottom-right for
+  every widget, which removed the special case rather than adding a rule.
+- Spacer grips say which axis they resize: `ew-resize` on a vertical spacer,
+  `ns-resize` on a horizontal one (they were all `nwse-resize`).
 - New widgets start on `--surface` (`#2a1415`), the same card colour as the
   buttons and the panel, instead of `#050505`. `DEFAULT_BG_COLOR` and the CSS
   fallbacks on `.canvas-widget` and `.photo-widget-content` moved together, so the

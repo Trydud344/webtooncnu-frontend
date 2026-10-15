@@ -1697,7 +1697,22 @@ export default function PlatformaCanvas() {
                       onPointerUp={(event) => finishResize(event, widget)}
                       onPointerCancel={(event) => cancelResize(event, widget)}
                       onKeyDown={(event) => resizeWithKeyboard(event, widget)}
-                    />
+                    >
+                      {/* Corner grip: three strokes parallel to the diagonal,
+                          brightest where the corner is, tapering away from it. */}
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 15 15 21" />
+                        <path d="M18.5 10.5 10.5 18.5" strokeOpacity="0.7" />
+                        <path d="M16 6 6 16" strokeOpacity="0.42" />
+                      </svg>
+                    </button>
                   </div>
                 )
               })}

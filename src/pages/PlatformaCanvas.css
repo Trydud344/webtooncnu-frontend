@@ -338,12 +338,6 @@
   cursor: default;
 }
 
-.canvas-widget.is-vertical-spacer .widget-resize-handle {
-  top: var(--widget-inset-small, 5px);
-  bottom: auto;
-  transform-origin: top right;
-}
-
 .widget-delete-button {
   position: absolute;
   top: var(--widget-inset-small, 5px);
@@ -393,6 +387,8 @@
   outline-offset: 2px;
 }
 
+/* Bare corner grip, no button chrome: three diagonal strokes that fade outwards,
+   drawn by an SVG in the markup. The 24px box is the hit area. */
 .widget-resize-handle {
   position: absolute;
   right: var(--widget-inset-small, 5px);
@@ -400,17 +396,31 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid rgba(255, 215, 217, 0.32);
-  border-radius: 50%;
-  background: #2a1415;
+  border: 0;
+  background: none;
+  color: rgba(255, 236, 236, 0.55);
   opacity: 0;
   cursor: nwse-resize;
   transform: scale(var(--widget-ui-scale, 1));
   transform-origin: bottom right;
-  transition: opacity 140ms ease, background-color 140ms ease;
+  transition: opacity 140ms ease, color 140ms ease;
+}
+
+.widget-resize-handle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Spacers resize on one axis only, so the cursor says which one. */
+.canvas-widget.is-vertical-spacer .widget-resize-handle {
+  cursor: ew-resize;
+}
+
+.canvas-widget.is-horizontal-spacer .widget-resize-handle {
+  cursor: ns-resize;
 }
 
 .canvas-widget:hover .widget-resize-handle,
@@ -419,21 +429,14 @@
   opacity: 1;
 }
 
-.widget-resize-handle:hover {
-  background: #3a1d1f;
+.widget-resize-handle:hover,
+.canvas-widget.is-resizing .widget-resize-handle {
+  color: var(--accent);
 }
 
 .widget-resize-handle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.widget-resize-handle::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1px solid var(--accent);
-  border-bottom: 1px solid var(--accent);
 }
 
 .widget-menu {
