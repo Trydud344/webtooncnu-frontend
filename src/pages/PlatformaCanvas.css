@@ -104,7 +104,8 @@
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.045);
   border-radius: var(--widget-radius, 6px);
-  background: #050505;
+  /* Fallback for the inline colour the canvas sets; mirrors DEFAULT_BG_COLOR. */
+  background: var(--surface);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -173,7 +174,8 @@
   z-index: 1;
   overflow: hidden;
   border-radius: inherit;
-  background: #050505;
+  /* Shows around a `contain`-fitted image; the canvas sets the widget colour inline. */
+  background: var(--surface);
 }
 
 .photo-widget-image {

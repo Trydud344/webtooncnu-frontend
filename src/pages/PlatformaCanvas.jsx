@@ -36,7 +36,9 @@ const DEFAULT_WIDGET_RADIUS = 6
 const WIDGET_GAP_INPUT = { min: 0, max: 6, step: 1 }
 const WIDGET_RADIUS_INPUT = { min: 0, max: 20, step: 1 }
 const SPACER_THICKNESS = 16
-const DEFAULT_BG_COLOR = '#050505'
+// The colour a widget starts with: `--surface`, the same card colour the buttons
+// and the panel use. Kept in sync with the CSS fallback in PlatformaCanvas.css.
+const DEFAULT_BG_COLOR = '#2a1415'
 // Below this the canvas, the panel and the add button stop fitting together.
 const MIN_VIEWPORT_WIDTH = 640
 const MIN_VIEWPORT_HEIGHT = 420

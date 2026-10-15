@@ -53,6 +53,11 @@
 
 ## Canvas polish (platforma)
 
+- New widgets start on `--surface` (`#2a1415`), the same card colour as the
+  buttons and the panel, instead of `#050505`. `DEFAULT_BG_COLOR` and the CSS
+  fallbacks on `.canvas-widget` and `.photo-widget-content` moved together, so the
+  panel's colour page still recognises an untouched widget as "at the default".
+  Spacers keep their own faint translucent fill.
 - The add button's `+` and the widget delete `×` are SVG paths, so they centre by
   geometry rather than by whatever the platform's font does with a `+`/`×`
   character. The nudges they needed before (`padding: 0 0 4px` on the button,
