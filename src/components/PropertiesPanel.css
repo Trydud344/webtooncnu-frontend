@@ -107,6 +107,7 @@
   color: var(--accent);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  transition: color 200ms ease;
 }
 
 .properties-pager {
@@ -228,6 +229,7 @@
   color: var(--ink);
   font: inherit;
   font-size: 0.82rem;
+  transition: border-bottom-color 200ms ease;
 }
 
 .properties-field:focus-visible {
@@ -288,6 +290,7 @@ select.properties-field {
 .properties-slider-head output {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+  transition: color 200ms ease;
 }
 
 .properties-slider-row {
@@ -303,6 +306,7 @@ select.properties-field {
   background: none;
   accent-color: var(--accent);
   cursor: pointer;
+  transition: accent-color 200ms ease;
 }
 
 .properties-slider-row input[type="range"]:focus-visible {

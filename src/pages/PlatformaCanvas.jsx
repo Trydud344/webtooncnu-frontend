@@ -1,17 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { Colorful } from '@uiw/react-color'
 import FontPicker from '../components/FontPicker'
 import PropertiesPanel, { PropertySlider } from '../components/PropertiesPanel'
 import TextWidgetEditor from '../components/TextWidgetEditor'
+import YouTubeBackgroundAudio, { parseYouTubeId } from '../components/YouTubeBackgroundAudio'
 import { ensureFullFont, fontStack } from '../fonts'
 import './PlatformaCanvas.css'
 
 const OPTIONS = [
   { kind: 'text', title: 'Text widget', description: 'Add a text block', mark: 'Aa' },
   { kind: 'photo', title: 'Photo widget', description: 'Add a photo', mark: '▧' },
-  { kind: 'horizontal-spacer', title: 'Horizontal space', description: 'Span the full grid width', mark: '↔' },
-  { kind: 'vertical-spacer', title: 'Vertical space', description: 'Span one viewer height', mark: '↕' },
 ]
 
 const PHOTO_FIT_OPTIONS = [
@@ -19,6 +18,11 @@ const PHOTO_FIT_OPTIONS = [
   { value: 'cover', label: 'Fill', description: 'Scale to fill: crop to fill the widget' },
   { value: 'fill', label: 'Stretch', description: 'Stretch to the exact widget size' },
   { value: 'none', label: 'Original', description: 'Original size, centered without scaling' },
+]
+
+const BG_FIT_OPTIONS = [
+  ...PHOTO_FIT_OPTIONS,
+  { value: 'tile', label: 'Tile', description: 'Repeat the image edge to edge' },
 ]
 
 const GRID_PITCH = 6
@@ -35,10 +39,18 @@ const DEFAULT_WIDGET_RADIUS = 6
 // Ranges for the Appearance sliders.
 const WIDGET_GAP_INPUT = { min: 0, max: 6, step: 1 }
 const WIDGET_RADIUS_INPUT = { min: 0, max: 20, step: 1 }
-const SPACER_THICKNESS = 16
+// Shared empty set: handing React the same reference back means "nothing is being
+// dragged" never causes a re-render of its own.
+const NO_IDS = new Set()
 // The colour a widget starts with: `--surface`, the same card colour the buttons
 // and the panel use. Kept in sync with the CSS fallback in PlatformaCanvas.css.
 const DEFAULT_BG_COLOR = '#2a1415'
+// Card colour while a photo backdrop is set: the gray the whole UI flips to.
+const GRAY_BG_COLOR = '#2b2b2b'
+// Page backdrop default: `var(--bg)`, kept in sync with index.css.
+const DEFAULT_PAGE_BG_COLOR = '#6f1a1f'
+// Tile edge in px, in stage space, when the background photo repeats.
+const DEFAULT_BG_TILE_SIZE = 64
 // Below this the canvas, the panel and the add button stop fitting together.
 const MIN_VIEWPORT_WIDTH = 640
 const MIN_VIEWPORT_HEIGHT = 420
@@ -75,21 +87,22 @@ function gridDimensionsFor(size) {
   }
 }
 
+// Widgets are immutable: every update spreads a new object rather than mutating
+// one. That lets the size a widget resolves to be cached on the object itself,
+// which matters because the placement helpers below ask for it inside their
+// inner loops. The result never depends on the viewport or the stage scale.
+const widgetSizeCache = new WeakMap()
+
 function widgetDimensions(widget) {
-  if (widget.kind === 'horizontal-spacer') {
-    return {
-      columns: GRID_COLUMNS,
-      rows: Math.max(1, Math.round(widget.spacerRows || SPACER_THICKNESS)),
-    }
-  }
+  const cached = widgetSizeCache.get(widget)
+  if (cached) return cached
 
-  if (widget.kind === 'vertical-spacer') {
-    return {
-      columns: Math.max(1, Math.round(widget.spacerColumns || SPACER_THICKNESS)),
-      rows: GRID_VISIBLE_ROWS,
-    }
-  }
+  const size = computeWidgetDimensions(widget)
+  widgetSizeCache.set(widget, size)
+  return size
+}
 
+function computeWidgetDimensions(widget) {
   const base = gridDimensionsFor(widget.size)
   return {
     columns: Math.min(GRID_COLUMNS, Math.max(MIN_WIDGET_WIDTH, Math.round(base.columns * (widget.widthScale || 1)))),
@@ -204,6 +217,84 @@ async function readImageFromClipboard() {
   throw new Error('No image or image link found in the clipboard.')
 }
 
+// Geometry fields a live resize owns. Live commits merge only these onto the
+// current widgets, so an unrelated update landing mid-resize (an image
+// finishing loading, say) is never clobbered by a stale session snapshot.
+const RESIZE_GEOMETRY_KEYS = ['col', 'row', 'widthScale', 'heightScale', 'horizontalAnchor', 'horizontalAnchorPoint', 'widgetAnchors']
+
+// Live-resize placement: grow the widget to the requested size and push
+// overlapping neighbours out of the way instead of clamping around them.
+// Returns the next widget list, or null when anything has nowhere to go.
+function pushedWidgetsForResize(current, widget, requestedWidth, requestedHeight) {
+  const original = current.find((item) => item.id === widget.id)
+  if (!original) return null
+
+  const base = gridDimensionsFor(original.size)
+  const resized = {
+    ...original,
+    widthScale: requestedWidth / base.columns,
+    heightScale: requestedHeight / base.rows,
+  }
+
+  const size = widgetDimensions(resized)
+  // A corner grip implies the opposite corner stays put: the left edge is
+  // pinned like the top one, whatever the widget's anchor says. Letting the
+  // anchor re-seat the widget mid-gesture moved the wrong edge — most
+  // visibly shrinking right after touching the canvas edge, when the left
+  // edge jumped instead of the grabbed corner following the pointer.
+  const maxColumn = Math.max(0, GRID_COLUMNS - size.columns)
+  const targetCol = Math.min(original.col, maxColumn)
+  const placed = withPositionAnchor(resized, { col: targetCol, row: original.row })
+
+  const rectOf = (col, row, dims) => ({
+    left: col, right: col + dims.columns, top: row, bottom: row + dims.rows,
+  })
+  const overlaps = (first, second) => first.left < second.right
+    && first.right > second.left && first.top < second.bottom && first.bottom > second.top
+  const placedRect = rectOf(placed.col, placed.row, size)
+
+  const touches = (item) => item.id !== original.id
+    && overlaps(placedRect, rectOf(item.col, item.row, widgetDimensions(item)))
+
+  // Push only, never pull: when the grown rect touches nothing, nobody moves
+  // but the resized widget — followers stay where a previous push left them
+  // instead of sliding back to keep edge contact.
+  if (!current.some(touches)) {
+    return withWidgetAnchors(current.map((item) => (item.id === original.id ? placed : item)))
+  }
+
+  // Every overlapped neighbour is pushed to its nearest free spot, attached
+  // or not. Resize only ever pushes, so anchor followers need no special
+  // casing — and special-casing them is what wrongly blocked growth when a
+  // follower linked only by chain had nowhere anchor-shaped to go.
+  const movedById = new Map()
+  const obstaclesFor = (excludeId) => [
+    placed,
+    ...movedById.values(),
+    ...current.filter((item) => item.id !== original.id && item.id !== excludeId && !movedById.has(item.id)),
+  ]
+
+  const overlapped = current.filter((item) => touches(item))
+  for (const other of overlapped) {
+    const spot = nearestAvailablePosition(other, obstaclesFor(other.id), other.col, other.row)
+    if (!spot) return null
+    movedById.set(other.id, withPositionAnchor(other, spot))
+  }
+
+  const proposed = current.map((item) => {
+    if (item.id === original.id) return placed
+    return movedById.get(item.id) || item
+  })
+  const next = withWidgetAnchors(proposed)
+
+  // Safety net: single-pass placement can still collide in exotic orderings,
+  // so verify every pair before accepting the push.
+  for (const item of next) {
+    if (!fits(item, item.col, item.row, next.filter((other) => other.id !== item.id))) return null
+  }
+  return next
+}
+
 function closestValidResize(widget, requestedWidth, requestedHeight, placed) {
   const currentSize = widgetDimensions(widget)
   const occupied = placed.map((other) => {
@@ -216,42 +307,10 @@ function closestValidResize(widget, requestedWidth, requestedHeight, placed) {
     }
   })
 
-  if (widget.kind === 'vertical-spacer') {
-    const maxWidth = GRID_COLUMNS - widget.col
-    const minWidth = Math.min(1, maxWidth)
-    const targetWidth = Math.max(minWidth, Math.min(maxWidth, requestedWidth))
-    let bestSize = currentSize
-    let bestDistance = Number.POSITIVE_INFINITY
-
-    for (let width = minWidth; width <= targetWidth; width += 1) {
-      const right = widget.col + width
-      const overlaps = occupied.some((other) => {
-        const overlapsX = widget.col < other.right && right > other.left
-        const overlapsY = widget.row < other.bottom && widget.row + currentSize.rows > other.top
-        return overlapsX && overlapsY
-      })
-      if (overlaps) continue
-
-      const distance = (targetWidth - width) ** 2
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestSize = { columns: width, rows: currentSize.rows }
-      }
-    }
-
-    return bestSize
-  }
-
-  const maxWidth = widget.kind === 'horizontal-spacer'
-    ? GRID_COLUMNS
-    : GRID_COLUMNS - widget.col
-  const minWidth = widget.kind === 'horizontal-spacer'
-    ? GRID_COLUMNS
-    : Math.min(MIN_WIDGET_WIDTH, maxWidth)
-  const targetWidth = widget.kind === 'horizontal-spacer'
-    ? GRID_COLUMNS
-    : Math.max(minWidth, Math.min(maxWidth, requestedWidth))
-  const minHeight = widget.kind === 'horizontal-spacer' ? 1 : MIN_WIDGET_HEIGHT
+  const maxWidth = GRID_COLUMNS - widget.col
+  const minWidth = Math.min(MIN_WIDGET_WIDTH, maxWidth)
+  const targetWidth = Math.max(minWidth, Math.min(maxWidth, requestedWidth))
+  const minHeight = MIN_WIDGET_HEIGHT
   const targetHeight = Math.max(minHeight, Math.min(GRID_VISIBLE_ROWS - widget.row, requestedHeight))
   let bestSize = currentSize
   let bestDistance = Number.POSITIVE_INFINITY
@@ -383,7 +442,7 @@ function horizontalAnchorForPosition(col, width) {
 
 function columnFromHorizontalAnchor(widget, width) {
   const maxColumn = Math.max(0, GRID_COLUMNS - width)
-  if (widget.kind === 'horizontal-spacer' || widget.horizontalAnchor === 'left') return 0
+  if (widget.horizontalAnchor === 'left') return 0
   if (widget.horizontalAnchor === 'right') return maxColumn
   if (widget.horizontalAnchor === 'relative' && Number.isFinite(widget.horizontalAnchorPoint)) {
     return Math.max(0, Math.min(maxColumn, Math.round(widget.horizontalAnchorPoint * GRID_COLUMNS - width / 2)))
@@ -467,18 +526,29 @@ function withWidgetAnchors(widgets) {
 }
 
 function connectedWidgetIds(widgetId, widgets) {
-  const availableIds = new Set(widgets.map((widget) => widget.id))
+  // Indexed once: the lookup used to scan the widget list on every hop.
+  const byId = new Map(widgets.map((widget) => [widget.id, widget]))
   const ids = new Set([widgetId])
   const pending = [widgetId]
   while (pending.length) {
-    const current = widgets.find((widget) => widget.id === pending.pop())
+    const current = byId.get(pending.pop())
     for (const anchor of current?.widgetAnchors || []) {
-      if (!availableIds.has(anchor.widgetId) || ids.has(anchor.widgetId)) continue
+      if (ids.has(anchor.widgetId) || !byId.has(anchor.widgetId)) continue
       ids.add(anchor.widgetId)
       pending.push(anchor.widgetId)
     }
   }
   return ids
+}
+
+// A selection is only worth a re-render when its membership actually changed.
+function sameIds(first, second) {
+  if (first === second) return true
+  if (first.size !== second.size) return false
+  for (const id of first) {
+    if (!second.has(id)) return false
+  }
+  return true
 }
 
 function moveAnchoredGroup(widgets, rootId) {
@@ -538,11 +608,29 @@ export default function PlatformaCanvas() {
   const [viewport, setViewport] = useState(viewportInfo)
   const [widgets, setWidgets] = useState([])
   const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [draggingIds, setDraggingIds] = useState([])
-  const [selectionBox, setSelectionBox] = useState(null)
+  const [draggingIds, setDraggingIds] = useState(NO_IDS)
+  const [marqueeActive, setMarqueeActive] = useState(false)
   const [holdingSize, setHoldingSize] = useState(null)
   const [widgetGap, setWidgetGap] = useState(DEFAULT_WIDGET_GAP)
   const [widgetRadius, setWidgetRadius] = useState(DEFAULT_WIDGET_RADIUS)
+  const [pageBackground, setPageBackground] = useState({
+    type: 'color',
+    color: DEFAULT_PAGE_BG_COLOR,
+    imageSrc: null,
+    fit: 'cover',
+    tileSize: DEFAULT_BG_TILE_SIZE,
+  })
+  const [pageBgIsPasting, setPageBgIsPasting] = useState(false)
+  const [pageBgPasteStatus, setPageBgPasteStatus] = useState('')
+  const [pageMusic, setPageMusic] = useState({ url: '', videoId: null, playing: false, volume: 80 })
+  const [musicStatus, setMusicStatus] = useState('')
+
+  // Typing never autoplays: the press on Play is the gesture audio needs.
+  const handleMusicUrlChange = (value) => {
+    const videoId = parseYouTubeId(value)
+    setPageMusic((prev) => ({ ...prev, url: value, videoId, playing: false }))
+    setMusicStatus(value.trim() && !videoId ? 'Not a YouTube link.' : '')
+  }
   const incompatibility = incompatibilityFor(viewport)
   const stageWidth = Math.max(0, Math.min(viewport.width - 48, (viewport.height - 48) * GRID_COLUMNS / GRID_VISIBLE_ROWS))
   const stageHeight = stageWidth * GRID_VISIBLE_ROWS / GRID_COLUMNS
@@ -558,6 +646,65 @@ export default function PlatformaCanvas() {
   const skipFlipIdsRef = useRef(new Set())
   const lastAddedIdRef = useRef(null)
   const nextWidgetIdRef = useRef(1)
+  const marqueeRef = useRef(null)
+  const marqueeBoxRef = useRef(null)
+  const marqueeFrameRef = useRef(null)
+  const stageRectRef = useRef(null)
+  const widgetRefCallbacks = useRef(new Map())
+  // Mirrors the selection for the callbacks that memoized children hold on to, so
+  // they act on the selection as it is now instead of the one they were born with.
+  const selectionRef = useRef(selectedIds)
+  useLayoutEffect(() => {
+    selectionRef.current = selectedIds
+  }, [selectedIds])
+
+  // The marquee is dragged at pointer rate, so its geometry goes straight to the
+  // element: a state update per move re-rendered the canvas and the panel.
+  const paintMarquee = useCallback(() => {
+    marqueeFrameRef.current = null
+    const box = marqueeBoxRef.current
+    const element = marqueeRef.current
+    if (!box || !element) return
+    element.style.left = `${box.left}px`
+    element.style.top = `${box.top}px`
+    element.style.width = `${box.width}px`
+    element.style.height = `${box.height}px`
+  }, [])
+
+  const queueMarqueePaint = useCallback(() => {
+    if (marqueeFrameRef.current !== null) return
+    marqueeFrameRef.current = requestAnimationFrame(paintMarquee)
+  }, [paintMarquee])
+
+  const clearMarquee = useCallback(() => {
+    marqueeBoxRef.current = null
+    if (marqueeFrameRef.current !== null) {
+      cancelAnimationFrame(marqueeFrameRef.current)
+      marqueeFrameRef.current = null
+    }
+    setMarqueeActive(false)
+  }, [])
+
+  // The marquee mounts on the first move past the threshold; paint it in the same
+  // commit, before the browser gets a chance to show an unsized box.
+  useLayoutEffect(() => {
+    if (marqueeActive) paintMarquee()
+  }, [marqueeActive, paintMarquee])
+
+  // One callback per widget id. An inline arrow changes identity on every render,
+  // which makes React detach and re-attach every widget ref along with it.
+  const widgetRefCallback = (id) => {
+    let callback = widgetRefCallbacks.current.get(id)
+    if (!callback) {
+      callback = (node) => {
+        if (node) widgetRefs.current[id] = node
+        else delete widgetRefs.current[id]
+      }
+      widgetRefCallbacks.current.set(id, callback)
+    }
+    return callback
+  }
+
   const captureWidgetRects = () => {
     const rects = {}
     Object.entries(widgetRefs.current).forEach(([id, element]) => {
@@ -574,9 +721,22 @@ export default function PlatformaCanvas() {
   }
 
   useEffect(() => {
-    const handleResize = () => setViewport(viewportInfo())
+    // Once per frame: resize fires in bursts, and each one re-renders the canvas.
+    let frameId = null
+    const applyViewport = () => {
+      frameId = null
+      stageRectRef.current = null
+      setViewport(viewportInfo())
+    }
+    const handleResize = () => {
+      if (frameId !== null) return
+      frameId = requestAnimationFrame(applyViewport)
+    }
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (frameId !== null) cancelAnimationFrame(frameId)
+    }
   }, [])
 
   useEffect(() => {
@@ -594,6 +754,7 @@ export default function PlatformaCanvas() {
           // The pointer may already have been released by the browser.
         }
         selectionDragRef.current = null
+        clearMarquee()
       }
 
       const drag = dragRef.current
@@ -608,24 +769,17 @@ export default function PlatformaCanvas() {
         dragRef.current = null
       }
 
-      const resize = resizeRef.current
-      if (resize) {
-        if (resize.frameId !== null) cancelAnimationFrame(resize.frameId)
-        resize.element.classList.remove('is-resizing')
-        resize.element.style.removeProperty('width')
-        resize.element.style.removeProperty('height')
-        resizeRef.current = null
-      }
+      if (resizeRef.current) cleanupResize(resizeRef.current)
 
-      setSelectionBox(null)
-      setSelectedIds(new Set())
-      setDraggingIds([])
+      clearMarquee()
+      setSelectedIds((current) => (current.size ? new Set() : current))
+      setDraggingIds(NO_IDS)
       setHoldingSize(null)
       setMenuOpen(false)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [clearMarquee])
 
   useEffect(() => {
     const items = optionRefs.current.filter(Boolean)
@@ -683,6 +837,11 @@ export default function PlatformaCanvas() {
     lastAddedIdRef.current = null
     skipFlipIdsRef.current = new Set()
 
+    const flips = []
+    const additions = []
+
+    // Every rect is read before anything is written: measuring one element and
+    // then animating the next flushed layout once per widget.
     widgets.forEach((widget) => {
       const element = widgetRefs.current[widget.id]
       if (!element) return
@@ -712,38 +871,39 @@ export default function PlatformaCanvas() {
             to.height = rect.height / stageScale
             to.clearProps += ',height'
           }
-          gsap.fromTo(
-            element,
-            from,
-            to,
-          )
+          flips.push({ element, from, to })
         }
       } else if (widget.id === addedId) {
-        gsap.fromTo(
-          element,
-          { autoAlpha: 0, scale: 0.92, y: 22 },
-          {
-            autoAlpha: 1,
-            scale: 1,
-            y: 0,
-            duration: 0.42,
-            ease: 'back.out(1.3)',
-            clearProps: 'transform,opacity,visibility',
-          },
-        )
+        additions.push(element)
       }
+    })
+
+    flips.forEach(({ element, from, to }) => {
+      gsap.fromTo(element, from, to)
+    })
+    additions.forEach((element) => {
+      gsap.fromTo(
+        element,
+        { autoAlpha: 0, scale: 0.92, y: 22 },
+        {
+          autoAlpha: 1,
+          scale: 1,
+          y: 0,
+          duration: 0.42,
+          ease: 'back.out(1.3)',
+          clearProps: 'transform,opacity,visibility',
+        },
+      )
     })
   }, [widgets, stageScale])
 
   const addWidget = (kind) => {
     const id = `widget-${nextWidgetIdRef.current}`
-    const isSpacer = kind === 'horizontal-spacer' || kind === 'vertical-spacer'
-    const size = isSpacer ? undefined : 'compact'
     nextWidgetIdRef.current += 1
     flipOriginRef.current = captureWidgetRects()
     lastAddedIdRef.current = id
     setWidgets((current) => {
-      const widget = { id, kind, size, ...(kind === 'photo' ? { photoFit: 'contain' } : null) }
+      const widget = { id, kind, size: 'compact', ...(kind === 'photo' ? { photoFit: 'contain' } : null) }
       const position = firstAvailablePosition(widget, current)
       if (!position) {
         flipOriginRef.current = null
@@ -766,6 +926,7 @@ export default function PlatformaCanvas() {
       next.delete(widgetId)
       return next
     })
+    widgetRefCallbacks.current.delete(widgetId)
     setWidgets((current) => withWidgetAnchors(
       current.filter((item) => item.id !== widgetId),
     ))
@@ -784,7 +945,7 @@ export default function PlatformaCanvas() {
     event.stopPropagation()
     if (event.shiftKey || event.metaKey || event.ctrlKey) {
       toggleWidgetSelection(widget.id)
-    } else if (!selectedIds.has(widget.id)) {
+    } else if (!selectionRef.current.has(widget.id)) {
       setSelectedIds(new Set([widget.id]))
     }
   }
@@ -806,6 +967,20 @@ export default function PlatformaCanvas() {
             pasteStatus: error?.message || 'Could not read an image from the clipboard.',
           }
         : item))
+    }
+  }
+
+  const pastePageBackgroundImage = async () => {
+    if (pageBgIsPasting) return
+    setPageBgIsPasting(true)
+    setPageBgPasteStatus('')
+    try {
+      const imageSrc = await readImageFromClipboard()
+      setPageBackground((prev) => ({ ...prev, imageSrc }))
+      setPageBgIsPasting(false)
+    } catch (error) {
+      setPageBgIsPasting(false)
+      setPageBgPasteStatus(error?.message || 'Could not read an image from the clipboard.')
     }
   }
 
@@ -845,15 +1020,18 @@ export default function PlatformaCanvas() {
     const elements = [...movingIds]
       .map((id) => widgetRefs.current[id])
       .filter(Boolean)
-    elements.forEach((element) => {
-      gsap.killTweensOf(element, 'filter')
-      element.style.removeProperty('filter')
-    })
+    // One setter per element for the whole drag: `gsap.set` per pointermove built
+    // a fresh tween every time.
+    const setters = elements.map((element) => ({
+      x: gsap.quickSetter(element, 'x', 'px'),
+      y: gsap.quickSetter(element, 'y', 'px'),
+    }))
     setHoldingSize(widget.size || 'standard')
     dragRef.current = {
       id: widget.id,
       ids: [...movingIds],
       elements,
+      setters,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -873,18 +1051,11 @@ export default function PlatformaCanvas() {
 
       const connectedIds = connectedWidgetIds(widget.id, current)
       const resizeAt = (requestedWidth, requestedHeight, obstacles) => {
-        let resized = original
-        if (original.kind === 'horizontal-spacer') {
-          resized = { ...original, spacerRows: requestedHeight }
-        } else if (original.kind === 'vertical-spacer') {
-          resized = { ...original, spacerColumns: requestedWidth }
-        } else {
-          const base = gridDimensionsFor(original.size)
-          resized = {
-            ...original,
-            widthScale: requestedWidth / base.columns,
-            heightScale: requestedHeight / base.rows,
-          }
+        const base = gridDimensionsFor(original.size)
+        const resized = {
+          ...original,
+          widthScale: requestedWidth / base.columns,
+          heightScale: requestedHeight / base.rows,
         }
 
         const size = widgetDimensions(resized)
@@ -924,8 +1095,25 @@ export default function PlatformaCanvas() {
     })
   }
 
+  // One teardown for every resize exit: pointerup, cancel, Escape, or a new
+  // press landing while a stale session is still armed. A missed pointerup
+  // (released off-canvas) used to leave a zombie session that kept resizing
+  // on hover, so the session tracks on window and every exit detaches it.
+  const cleanupResize = (resize) => {
+    if (!resize) return
+    if (resize.frameId !== null) cancelAnimationFrame(resize.frameId)
+    window.removeEventListener('pointermove', resize.onMove)
+    window.removeEventListener('pointerup', resize.onUp)
+    window.removeEventListener('pointercancel', resize.onCancel)
+    resizeRef.current = null
+    resize.element.classList.remove('is-resizing')
+    resize.element.style.removeProperty('width')
+    resize.element.style.removeProperty('height')
+  }
+
   const startResize = (event, widget) => {
     if (event.button !== 0) return
+    if (resizeRef.current) cleanupResize(resizeRef.current)
     event.preventDefault()
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -933,23 +1121,31 @@ export default function PlatformaCanvas() {
     const element = widgetRefs.current[widget.id]
     const rect = element.getBoundingClientRect()
     const size = widgetDimensions(widget)
-    const connectedIds = connectedWidgetIds(widget.id, widgets)
-    resizeRef.current = {
+    const session = {
       id: widget.id,
       pointerId: event.pointerId,
       left: rect.left,
       top: rect.top,
+      col: widget.col,
       grabRight: event.clientX - rect.right,
       grabBottom: event.clientY - rect.bottom,
       width: size.columns,
       height: size.rows,
-      moved: false,
       pointerX: event.clientX,
       pointerY: event.clientY,
       frameId: null,
       element,
-      others: widgets.filter((item) => item.id !== widget.id && !connectedIds.has(item.id)),
+      base: widgets,
     }
+    // Button-level move/up miss anything outside the button when capture is
+    // lost, so the session tracks on window until it ends.
+    session.onMove = (moveEvent) => moveResize(moveEvent, widget)
+    session.onUp = (upEvent) => finishResize(upEvent, widget)
+    session.onCancel = (cancelEvent) => cancelResize(cancelEvent, widget)
+    resizeRef.current = session
+    window.addEventListener('pointermove', session.onMove)
+    window.addEventListener('pointerup', session.onUp)
+    window.addEventListener('pointercancel', session.onCancel)
     element.classList.add('is-resizing')
     element.style.width = `${size.columns * GRID_PITCH - 2 * widgetGap}px`
     element.style.height = `${size.rows * GRID_PITCH - 2 * widgetGap}px`
@@ -958,21 +1154,37 @@ export default function PlatformaCanvas() {
 
   const applyResize = (resize, widget) => {
     const displayPitch = GRID_PITCH * stageScale
-    const requestedWidth = Math.round((resize.pointerX - resize.grabRight - resize.left) / displayPitch)
-    const requestedHeight = Math.round((resize.pointerY - resize.grabBottom - resize.top) / displayPitch)
-    const size = closestValidResize(
-      widget,
-      requestedWidth,
-      requestedHeight,
-      resize.others,
+    const maxWidth = GRID_COLUMNS - resize.col
+    const minWidth = Math.min(MIN_WIDGET_WIDTH, maxWidth)
+    const minHeight = MIN_WIDGET_HEIGHT
+    const requestedWidth = Math.max(minWidth, Math.min(maxWidth, Math.round((resize.pointerX - resize.grabRight - resize.left) / displayPitch)))
+    const requestedHeight = Math.max(
+      minHeight,
+      Math.min(GRID_VISIBLE_ROWS - widget.row, Math.round((resize.pointerY - resize.grabBottom - resize.top) / displayPitch)),
     )
-    if (size.columns === resize.width && size.rows === resize.height) return
+    if (requestedWidth === resize.width && requestedHeight === resize.height) return
 
+    // Push neighbours aside live; when anything has nowhere to go the
+    // request is dropped and the widget holds its current size.
+    const pushed = pushedWidgetsForResize(resize.base, widget, requestedWidth, requestedHeight)
+    if (!pushed) return
+    const next = pushed.find((item) => item.id === widget.id)
+    const size = widgetDimensions(next)
+    resize.base = pushed
     resize.width = size.columns
     resize.height = size.rows
-    resize.moved = true
+    resize.left += (next.col - resize.col) * displayPitch
+    resize.col = next.col
     resize.element.style.width = `${size.columns * GRID_PITCH - 2 * widgetGap}px`
     resize.element.style.height = `${size.rows * GRID_PITCH - 2 * widgetGap}px`
+    const geometryById = new Map(pushed.map((item) => [item.id, item]))
+    setWidgets((current) => current.map((item) => {
+      const geometry = geometryById.get(item.id)
+      if (!geometry) return item
+      const merged = { ...item }
+      for (const key of RESIZE_GEOMETRY_KEYS) merged[key] = geometry[key]
+      return merged
+    }))
   }
 
   const moveResize = (event, widget) => {
@@ -996,12 +1208,10 @@ export default function PlatformaCanvas() {
     event.stopPropagation()
     if (resize.frameId !== null) cancelAnimationFrame(resize.frameId)
     resize.frameId = null
+    // The layout is already committed by the live pushes; this only settles
+    // a pointer that stopped between grid steps.
     applyResize(resize, widget)
-    resizeRef.current = null
-    if (resize.moved) commitWidgetResize(widget, resize.width, resize.height, false)
-    resize.element.classList.remove('is-resizing')
-    resize.element.style.removeProperty('width')
-    resize.element.style.removeProperty('height')
+    cleanupResize(resize)
     setHoldingSize(null)
   }
 
@@ -1009,11 +1219,7 @@ export default function PlatformaCanvas() {
     const resize = resizeRef.current
     if (!resize || resize.id !== widget.id || resize.pointerId !== event.pointerId) return
     event.stopPropagation()
-    if (resize.frameId !== null) cancelAnimationFrame(resize.frameId)
-    resizeRef.current = null
-    resize.element.classList.remove('is-resizing')
-    resize.element.style.removeProperty('width')
-    resize.element.style.removeProperty('height')
+    cleanupResize(resize)
     setHoldingSize(null)
   }
 
@@ -1026,8 +1232,6 @@ export default function PlatformaCanvas() {
     }
     const change = changes[event.key]
     if (!change) return
-    if (widget.kind === 'horizontal-spacer' && change[0] !== 0) return
-    if (widget.kind === 'vertical-spacer' && change[1] !== 0) return
     event.preventDefault()
 
     const current = widgetDimensions(widget)
@@ -1044,10 +1248,17 @@ export default function PlatformaCanvas() {
     }
   }
 
-  const pointOnGrid = (event) => {
+  // The stage only moves when the window does, so one rect per drag replaces a
+  // forced layout on every pointermove.
+  const readStageRect = () => {
     const stage = stageRef.current
-    if (!stage) return { x: 0, y: 0 }
-    const rect = stage.getBoundingClientRect()
+    if (!stage) return null
+    if (!stageRectRef.current) stageRectRef.current = stage.getBoundingClientRect()
+    return stageRectRef.current
+  }
+
+  const pointOnGrid = (event, rect = readStageRect()) => {
+    if (!rect) return { x: 0, y: 0 }
     return {
       x: Math.max(0, Math.min(GRID_VIRTUAL_WIDTH, (event.clientX - rect.left) / stageScale)),
       y: Math.max(0, Math.min(GRID_VIRTUAL_HEIGHT, (event.clientY - rect.top) / stageScale)),
@@ -1060,6 +1271,7 @@ export default function PlatformaCanvas() {
     const point = pointOnGrid(event)
     if (!selectionDrag.moved && Math.hypot(point.x - selectionDrag.startX, point.y - selectionDrag.startY) < 4) return
 
+    const firstMove = !selectionDrag.moved
     selectionDrag.moved = true
     selectionDrag.currentX = point.x
     selectionDrag.currentY = point.y
@@ -1067,7 +1279,11 @@ export default function PlatformaCanvas() {
     const top = Math.min(selectionDrag.startY, point.y)
     const right = Math.max(selectionDrag.startX, point.x)
     const bottom = Math.max(selectionDrag.startY, point.y)
-    setSelectionBox({ left, top, width: right - left, height: bottom - top })
+    marqueeBoxRef.current = { left, top, width: right - left, height: bottom - top }
+    // The box mounts on the first move, so that one waits for the commit; the
+    // rest of the drag writes to the element between frames.
+    if (firstMove) setMarqueeActive(true)
+    else queueMarqueePaint()
 
     const nextSelection = new Set(selectionDrag.baseIds)
     widgets.forEach((item) => {
@@ -1080,16 +1296,19 @@ export default function PlatformaCanvas() {
         && top <= itemBottom && bottom >= itemTop
       if (intersects) nextSelection.add(item.id)
     })
-    setSelectedIds(nextSelection)
+    // Sweeping over the same widgets again is the common case, and a new set
+    // would re-render the canvas and the panel for an unchanged selection.
+    setSelectedIds((current) => (sameIds(current, nextSelection) ? current : nextSelection))
   }
 
   const startSelectionDrag = (event) => {
     if (event.button !== 0 || event.target !== event.currentTarget) return
     event.preventDefault()
+    stageRectRef.current = null
     const point = pointOnGrid(event)
     const additive = event.shiftKey || event.metaKey || event.ctrlKey
-    const baseIds = additive ? new Set(selectedIds) : new Set()
-    if (!additive) setSelectedIds(new Set())
+    const baseIds = additive ? new Set(selectionRef.current) : new Set()
+    if (!additive) setSelectedIds((current) => (current.size ? new Set() : current))
     event.currentTarget.setPointerCapture(event.pointerId)
     selectionDragRef.current = {
       pointerId: event.pointerId,
@@ -1108,8 +1327,10 @@ export default function PlatformaCanvas() {
     if (!selectionDrag || selectionDrag.pointerId !== event.pointerId) return
     updateSelectionDrag(event)
     selectionDragRef.current = null
-    setSelectionBox(null)
-    if (!selectionDrag.moved && !selectionDrag.additive) setSelectedIds(new Set())
+    clearMarquee()
+    if (!selectionDrag.moved && !selectionDrag.additive) {
+      setSelectedIds((current) => (current.size ? new Set() : current))
+    }
   }
 
   const moveDrag = (event, widget) => {
@@ -1122,11 +1343,17 @@ export default function PlatformaCanvas() {
 
     if (!drag.moved) {
       drag.moved = true
-      setDraggingIds(drag.ids)
+      // Written once, in the same tick as the class the re-render is about to add,
+      // so a dragged widget never slips behind its neighbours for a frame.
+      gsap.set(drag.elements, { zIndex: 5 })
+      setDraggingIds(new Set(drag.ids))
     }
 
-    drag.elements.forEach((element) => {
-      gsap.set(element, { x: dx / stageScale, y: dy / stageScale, zIndex: 5 })
+    const x = dx / stageScale
+    const y = dy / stageScale
+    drag.setters.forEach((setter) => {
+      setter.x(x)
+      setter.y(y)
     })
   }
 
@@ -1168,7 +1395,7 @@ export default function PlatformaCanvas() {
       const positioned = current.map((item) => movedById.get(item.id) || item)
       return withWidgetAnchors(positioned)
     })
-    setDraggingIds([])
+    setDraggingIds(NO_IDS)
   }
 
   const cancelDrag = (event, widget) => {
@@ -1182,7 +1409,7 @@ export default function PlatformaCanvas() {
     }
 
     dragRef.current = null
-    setDraggingIds([])
+    setDraggingIds(NO_IDS)
   }
 
   const selectedWidgets = widgets.filter((item) => selectedIds.has(item.id))
@@ -1266,23 +1493,28 @@ export default function PlatformaCanvas() {
       : null
     : null
 
-  const setFontForSelected = (value) => {
-    if (!selectedTextWidgets.length) return
-    const ids = new Set(selectedTextWidgets.map((item) => item.id))
-    setWidgets((current) => current.map((item) => ids.has(item.id)
-      ? { ...item, font: value === 'default' ? undefined : value }
-      : item))
-  }
-
-  const handleFontChange = (value) => {
+  // Stable so the memoized picker is not re-rendered by every canvas change; it
+  // reads the selection through the ref instead of closing over it.
+  const handleFontChange = useCallback((value) => {
     ensureFullFont(value)
-    setFontForSelected(value)
-  }
+    setWidgets((current) => {
+      const ids = selectionRef.current
+      let changed = false
+      const next = current.map((item) => {
+        if (!ids.has(item.id) || item.kind !== 'text') return item
+        changed = true
+        return { ...item, font: value === 'default' ? undefined : value }
+      })
+      return changed ? next : current
+    })
+  }, [])
 
   const bgWidgets = selectedWidgets.filter((item) => item.kind === 'text' || item.kind === 'photo')
+  const hasPhotoBackground = pageBackground.type === 'photo' && Boolean(pageBackground.imageSrc)
+  const defaultWidgetBg = hasPhotoBackground ? GRAY_BG_COLOR : DEFAULT_BG_COLOR
   const activeBgColor = bgWidgets.length
-    ? bgWidgets.every((item) => (item.bgColor || DEFAULT_BG_COLOR) === (bgWidgets[0].bgColor || DEFAULT_BG_COLOR))
-      ? (bgWidgets[0].bgColor || DEFAULT_BG_COLOR)
+    ? bgWidgets.every((item) => (item.bgColor || defaultWidgetBg) === (bgWidgets[0].bgColor || defaultWidgetBg))
+      ? (bgWidgets[0].bgColor || defaultWidgetBg)
       : null
     : null
 
@@ -1290,8 +1522,77 @@ export default function PlatformaCanvas() {
     if (!bgWidgets.length) return
     const ids = new Set(bgWidgets.map((item) => item.id))
     setWidgets((current) => current.map((item) => ids.has(item.id)
-      ? { ...item, bgColor: value === DEFAULT_BG_COLOR ? undefined : value }
+      ? { ...item, bgColor: value === defaultWidgetBg ? undefined : value }
       : item))
+  }
+
+  const activeBgType = bgWidgets.length
+    ? bgWidgets.every((item) => (item.bgType || 'color') === (bgWidgets[0].bgType || 'color'))
+      ? (bgWidgets[0].bgType || 'color')
+      : null
+    : null
+
+  const setBgTypeForSelected = (value) => {
+    if (!bgWidgets.length) return
+    const ids = new Set(bgWidgets.map((item) => item.id))
+    setWidgets((current) => current.map((item) => ids.has(item.id)
+      ? { ...item, bgType: value === 'color' ? undefined : value }
+      : item))
+  }
+
+  const activeBgFit = bgWidgets.length
+    ? bgWidgets.every((item) => (item.bgFit || 'contain') === (bgWidgets[0].bgFit || 'contain'))
+      ? (bgWidgets[0].bgFit || 'contain')
+      : null
+    : null
+
+  const setBgFitForSelected = (value) => {
+    if (!bgWidgets.length) return
+    const ids = new Set(bgWidgets.map((item) => item.id))
+    setWidgets((current) => current.map((item) => ids.has(item.id)
+      ? { ...item, bgFit: value }
+      : item))
+  }
+
+  const activeBgTileSize = bgWidgets.length
+    ? bgWidgets.every((item) => (item.bgTileSize || DEFAULT_BG_TILE_SIZE) === (bgWidgets[0].bgTileSize || DEFAULT_BG_TILE_SIZE))
+      ? (bgWidgets[0].bgTileSize || DEFAULT_BG_TILE_SIZE)
+      : null
+    : null
+
+  const setBgTileSizeForSelected = (value) => {
+    const size = Number(value)
+    const bgTileSize = value.trim() === '' || !Number.isFinite(size) || size <= 0 ? undefined : size
+    if (!bgWidgets.length) return
+    const ids = new Set(bgWidgets.map((item) => item.id))
+    setWidgets((current) => current.map((item) => ids.has(item.id)
+      ? { ...item, bgTileSize }
+      : item))
+  }
+
+  const bgIsPasting = bgWidgets.some((item) => item.bgIsPasting)
+  const bgPasteStatus = (bgWidgets.find((item) => item.bgPasteStatus) || {}).bgPasteStatus || ''
+
+  const pasteBackgroundImage = async () => {
+    if (!bgWidgets.length || bgWidgets.some((item) => item.bgIsPasting)) return
+    const ids = new Set(bgWidgets.map((item) => item.id))
+    setWidgets((current) => current.map((item) => ids.has(item.id)
+      ? { ...item, bgIsPasting: true, bgPasteStatus: '' }
+      : item))
+    try {
+      const imageSrc = await readImageFromClipboard()
+      setWidgets((current) => current.map((item) => ids.has(item.id)
+        ? { ...item, bgImageSrc: imageSrc, bgIsPasting: false, bgPasteStatus: '' }
+        : item))
+    } catch (error) {
+      setWidgets((current) => current.map((item) => ids.has(item.id)
+        ? {
+            ...item,
+            bgIsPasting: false,
+            bgPasteStatus: error?.message || 'Could not read an image from the clipboard.',
+          }
+        : item))
+    }
   }
 
   const hasText = selectedTextWidgets.length > 0
@@ -1303,22 +1604,88 @@ export default function PlatformaCanvas() {
   if (bgWidgets.length > 0) {
     pages.push({
       id: 'colors',
-      label: 'colors',
+      label: 'background',
       content: (
-        <div
-          className="properties-colorful"
-          role="group"
-          aria-label="Background color and opacity"
-        >
-          <Colorful
-            color={activeBgColor || DEFAULT_BG_COLOR}
-            onChange={(color) => setBgColorForSelected(color.hexa)}
-            style={{ width: '100%' }}
-          />
-          <p className="properties-color">
-            {activeBgColor === null ? 'Mixed' : activeBgColor.toUpperCase()}
-          </p>
-        </div>
+        <>
+          <div className="properties-styles" role="group" aria-label="Background type">
+            <button
+              type="button"
+              aria-pressed={activeBgType === 'color'}
+              onClick={() => setBgTypeForSelected('color')}
+            >
+              Color
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeBgType === 'photo'}
+              onClick={() => setBgTypeForSelected('photo')}
+            >
+              Photo
+            </button>
+          </div>
+          {activeBgType === 'photo' ? (
+            <>
+              <button
+                className="photo-widget-button"
+                type="button"
+                disabled={bgIsPasting}
+                onClick={pasteBackgroundImage}
+              >
+                {bgIsPasting ? 'Pasting…' : 'Paste image'}
+              </button>
+              <select
+                id="background-fit-select"
+                className="properties-field"
+                value={activeBgFit || ''}
+                aria-label="Background image scaling"
+                onChange={(event) => setBgFitForSelected(event.target.value)}
+              >
+                {activeBgFit === null && (
+                  <option value="" disabled>Mixed…</option>
+                )}
+                {BG_FIT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} title={option.description}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {activeBgFit === 'tile' && (
+                <div className="properties-field-group">
+                  <label className="properties-label" htmlFor="background-tile-size-input">tile size</label>
+                  <input
+                    id="background-tile-size-input"
+                    className="properties-field"
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder={activeBgTileSize === null ? 'mixed' : String(DEFAULT_BG_TILE_SIZE)}
+                    value={activeBgTileSize === null ? '' : String(activeBgTileSize)}
+                    onChange={(event) => setBgTileSizeForSelected(event.target.value)}
+                  />
+                </div>
+              )}
+              {bgPasteStatus && (
+                <p className="properties-color" role="status">{bgPasteStatus}</p>
+              )}
+            </>
+          ) : (
+            <div
+              className="properties-colorful"
+              role="group"
+              aria-label="Background color and opacity"
+            >
+              <Colorful
+                color={activeBgColor || defaultWidgetBg}
+                onChange={(color) => setBgColorForSelected(color.hexa)}
+                style={{ width: '100%' }}
+              />
+              <p className="properties-color">
+                {activeBgColor === null ? 'Mixed' : activeBgColor.toUpperCase()}
+              </p>
+            </div>
+          )}
+        </>
       ),
     })
   }
@@ -1458,12 +1825,135 @@ export default function PlatformaCanvas() {
           input={WIDGET_RADIUS_INPUT}
           onChange={setWidgetRadius}
         />
+        <div className="properties-styles" role="group" aria-label="Page background type">
+          <button
+            type="button"
+            aria-pressed={pageBackground.type === 'color'}
+            onClick={() => setPageBackground((prev) => ({ ...prev, type: 'color' }))}
+          >
+            Color
+          </button>
+          <button
+            type="button"
+            aria-pressed={pageBackground.type === 'photo'}
+            onClick={() => setPageBackground((prev) => ({ ...prev, type: 'photo' }))}
+          >
+            Photo
+          </button>
+        </div>
+        {pageBackground.type === 'photo' ? (
+          <>
+            <button
+              className="photo-widget-button"
+              type="button"
+              disabled={pageBgIsPasting}
+              onClick={pastePageBackgroundImage}
+            >
+              {pageBgIsPasting ? 'Pasting…' : 'Paste image'}
+            </button>
+            <select
+              id="page-background-fit-select"
+              className="properties-field"
+              value={pageBackground.fit}
+              aria-label="Page background image scaling"
+              onChange={(event) => setPageBackground((prev) => ({ ...prev, fit: event.target.value }))}
+            >
+              {BG_FIT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value} title={option.description}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {pageBackground.fit === 'tile' && (
+              <div className="properties-field-group">
+                <label className="properties-label" htmlFor="page-background-tile-size-input">tile size</label>
+                <input
+                  id="page-background-tile-size-input"
+                  className="properties-field"
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  placeholder={String(DEFAULT_BG_TILE_SIZE)}
+                  value={pageBackground.tileSize ?? ''}
+                  onChange={(event) => {
+                    const size = Number(event.target.value)
+                    setPageBackground((prev) => ({
+                      ...prev,
+                      tileSize: event.target.value.trim() === '' || !Number.isFinite(size) || size <= 0
+                        ? undefined
+                        : size,
+                    }))
+                  }}
+                />
+              </div>
+            )}
+            {pageBgPasteStatus && (
+              <p className="properties-color" role="status">{pageBgPasteStatus}</p>
+            )}
+          </>
+        ) : (
+          <div
+            className="properties-colorful"
+            role="group"
+            aria-label="Page background color and opacity"
+          >
+            <Colorful
+              color={pageBackground.color}
+              onChange={(color) => setPageBackground((prev) => ({ ...prev, color: color.hexa }))}
+              style={{ width: '100%' }}
+            />
+            <p className="properties-color">
+              {pageBackground.color.toUpperCase()}
+            </p>
+          </div>
+        )}
+        <div className="properties-field-group">
+          <label className="properties-label" htmlFor="page-music-link-input">music</label>
+          <input
+            id="page-music-link-input"
+            className="properties-field"
+            type="url"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="YouTube link"
+            placeholder="YouTube link"
+            value={pageMusic.url}
+            onChange={(event) => handleMusicUrlChange(event.target.value)}
+          />
+        </div>
+        {pageMusic.videoId && (
+          <>
+            <div className="properties-styles" role="group" aria-label="Background music">
+              <button
+                type="button"
+                aria-pressed={pageMusic.playing}
+                onClick={() => setPageMusic((prev) => ({ ...prev, playing: !prev.playing }))}
+              >
+                {pageMusic.playing ? 'Stop' : 'Play'}
+              </button>
+            </div>
+            <PropertySlider
+              id="page-music-volume-slider"
+              label="Volume"
+              value={pageMusic.volume}
+              defaultValue={80}
+              input={{ min: 0, max: 100, step: 1 }}
+              onChange={(volume) => setPageMusic((prev) => ({ ...prev, volume }))}
+            />
+          </>
+        )}
+        {musicStatus && (
+          <p className="properties-color" role="status">{musicStatus}</p>
+        )}
       </>
     ),
   })
 
   return (
-    <div className={`platforma-canvas${incompatibility ? ' is-incompatible' : ''}`}>
+    <div className={`platforma-canvas${incompatibility ? ' is-incompatible' : ''}${hasPhotoBackground ? ' has-photo-background' : ''}`}>
       {incompatibility ? (
         <div className="platforma-incompatibility" role="alert">
           <h1>
@@ -1479,6 +1969,45 @@ export default function PlatformaCanvas() {
         </div>
       ) : (
         <>
+          {pageMusic.videoId && (
+            <YouTubeBackgroundAudio
+              videoId={pageMusic.videoId}
+              playing={pageMusic.playing}
+              volume={pageMusic.volume}
+              onError={() => {
+                setPageMusic((prev) => ({ ...prev, playing: false }))
+                setMusicStatus("That video can't play here.")
+              }}
+              onPlayingChange={(isPlaying) => {
+                setPageMusic((prev) => (prev.playing === isPlaying ? prev : { ...prev, playing: isPlaying }))
+              }}
+            />
+          )}
+          {pageBackground.type === 'photo' && pageBackground.imageSrc && pageBackground.fit === 'tile' ? (
+            <div
+              className="platforma-background"
+              aria-hidden="true"
+              style={{
+                backgroundImage: `url("${pageBackground.imageSrc}")`,
+                backgroundSize: `${pageBackground.tileSize || DEFAULT_BG_TILE_SIZE}px`,
+              }}
+            />
+          ) : (
+            <div
+              className="platforma-background"
+              aria-hidden="true"
+              style={{ backgroundColor: pageBackground.color }}
+            >
+              {pageBackground.type === 'photo' && pageBackground.imageSrc && (
+                <img
+                  src={pageBackground.imageSrc}
+                  alt=""
+                  draggable="false"
+                  style={{ objectFit: pageBackground.fit }}
+                />
+              )}
+            </div>
+          )}
           <div
             ref={stageRef}
             className="platforma-stage"
@@ -1512,39 +2041,25 @@ export default function PlatformaCanvas() {
                   height: `${GRID_VIRTUAL_HEIGHT + GRID_PITCH}px`,
                 }}
               />
-              {selectionBox && (
+              {marqueeActive && (
                 <div
+                  ref={marqueeRef}
                   className="selection-marquee"
                   aria-hidden="true"
-                  style={{
-                    left: `${selectionBox.left}px`,
-                    top: `${selectionBox.top}px`,
-                    width: `${selectionBox.width}px`,
-                    height: `${selectionBox.height}px`,
-                  }}
                 />
               )}
               {widgets.map((widget) => {
                 const size = widgetDimensions(widget)
-                const horizontalSpacer = widget.kind === 'horizontal-spacer'
-                const verticalSpacer = widget.kind === 'vertical-spacer'
-                const isSpacer = horizontalSpacer || verticalSpacer
                 const isSelected = selectedIds.has(widget.id)
-                const isDragging = draggingIds.includes(widget.id)
-                const widgetLabel = horizontalSpacer
-                  ? 'Horizontal spacer'
-                  : verticalSpacer
-                    ? 'Vertical spacer'
-                    : `${widget.kind} widget`
-                const widgetBackground = isSpacer ? undefined : (widget.bgColor || DEFAULT_BG_COLOR)
+                const isDragging = draggingIds.has(widget.id)
+                const widgetLabel = `${widget.kind} widget`
+                const widgetBackground = widget.bgColor || defaultWidgetBg
+                const widgetBackgroundPhoto = widget.bgType === 'photo' && widget.bgImageSrc
                 return (
                   <div
                     key={widget.id}
-                    ref={(node) => {
-                      if (node) widgetRefs.current[widget.id] = node
-                      else delete widgetRefs.current[widget.id]
-                    }}
-                    className={`canvas-widget${widget.kind === 'photo' ? ' is-photo' : ''}${isSpacer ? ` is-spacer is-${widget.kind}` : ''}${isSelected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}`}
+                    ref={widgetRefCallback(widget.id)}
+                    className={`canvas-widget${widget.kind === 'photo' ? ' is-photo' : ''}${isSelected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}`}
                     style={{
                       '--widget-ui-scale': 1 / stageScale,
                       '--widget-inset-small': `${5 / stageScale}px`,
@@ -1566,8 +2081,26 @@ export default function PlatformaCanvas() {
                     onPointerUp={(event) => finishDrag(event, widget)}
                     onPointerCancel={(event) => cancelDrag(event, widget)}
                   >
-                    {isSpacer && (
-                      <span className="widget-spacer-label" aria-hidden="true">{widgetLabel}</span>
+                    {widgetBackgroundPhoto && (
+                      widget.bgFit === 'tile' ? (
+                        <div
+                          className="widget-background-layer widget-background-tile"
+                          aria-hidden="true"
+                          style={{
+                            backgroundImage: `url("${widget.bgImageSrc}")`,
+                            backgroundSize: `${widget.bgTileSize || DEFAULT_BG_TILE_SIZE}px`,
+                          }}
+                        />
+                      ) : (
+                        <img
+                          className="photo-widget-image widget-background-layer"
+                          src={widget.bgImageSrc}
+                          alt=""
+                          draggable="false"
+                          aria-hidden="true"
+                          style={{ objectFit: widget.bgFit || 'contain' }}
+                        />
+                      )
                     )}
                     {widget.kind === 'text' && (
                       <TextWidgetEditor
@@ -1590,7 +2123,7 @@ export default function PlatformaCanvas() {
                     {widget.kind === 'photo' && (
                       <div
                         className="photo-widget-content"
-                        style={widgetBackground ? { backgroundColor: widgetBackground } : undefined}
+                        style={{ backgroundColor: widgetBackgroundPhoto ? 'transparent' : widgetBackground }}
                       >
                         {widget.imageSrc ? (
                           <>
@@ -1682,16 +2215,8 @@ export default function PlatformaCanvas() {
                     <button
                       className="widget-resize-handle"
                       type="button"
-                      aria-label={horizontalSpacer
-                        ? 'Resize horizontal spacer thickness'
-                        : verticalSpacer
-                          ? 'Resize vertical spacer thickness'
-                          : 'Resize widget'}
-                      title={horizontalSpacer
-                        ? 'Drag vertically to adjust spacing · Use up and down arrows'
-                        : verticalSpacer
-                          ? 'Drag horizontally to adjust spacing · Use left and right arrows'
-                          : 'Drag to resize · Use arrow keys to resize'}
+                      aria-label="Resize widget"
+                      title="Drag to resize · Use arrow keys to resize"
                       onPointerDown={(event) => startResize(event, widget)}
                       onPointerMove={(event) => moveResize(event, widget)}
                       onPointerUp={(event) => finishResize(event, widget)}

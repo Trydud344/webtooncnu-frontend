@@ -15,6 +15,7 @@
   color: var(--ink);
   font: inherit;
   font-size: 0.82rem;
+  transition: border-bottom-color 200ms ease;
 }
 
 .font-picker-search::placeholder {
@@ -57,6 +58,7 @@
   font-size: 0.66rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  transition: background-color 200ms ease;
 }
 
 .font-picker-option {
