@@ -52,13 +52,15 @@
     'justify-content:center;padding:0 var(--nb-side-pad) var(--nb-bottom-pad)}',
     'nav-bar[data-sticky="false"]{position:static}',
     '.nb-bar{position:relative;display:flex;align-items:center;padding:6px;',
-    'border-radius:100px;will-change:transform;max-width:100%;overflow:hidden}',
+    'border-radius:100px;will-change:transform;max-width:100%;overflow:hidden;',
+    'box-shadow:0 4px 20px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05);',
+    'transition:box-shadow .3s ease}',
+    '.nb-bar:has(> .nb-bg.is-minimal){box-shadow:none}',
     '.nb-bar::after{content:"";position:absolute;inset:0;border:3px solid var(--nb-bg);',
     'border-radius:100px;pointer-events:none;z-index:2;transition:opacity .3s ease}',
     '.nb-bar:has(> .nb-bg.is-minimal)::after{opacity:0}',
     '.nb-bg{position:absolute;inset:0;border-radius:100px;background:var(--nb-bg);',
-    'box-shadow:0 4px 20px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.2),',
-    'inset 0 1px 0 rgba(255,255,255,.05);transition:opacity .3s ease;pointer-events:none}',
+    'box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:opacity .3s ease;pointer-events:none}',
     '.nb-bg.is-minimal{opacity:0}',
     '.nb-highlight{position:absolute;top:6px;height:calc(100% - 12px);width:64px;',
     'background:var(--nb-highlight,rgba(255,255,255,.12));border-radius:100px;',
@@ -723,7 +725,7 @@
       if (inst.isMinimal) return;
       inst.isMinimal = true;
       inst.bg.classList.add('is-minimal');
-      animate.to(inst.highlight, { opacity: 0, duration: 0.08 });
+      animate.to(inst.highlight, { opacity: 0, duration: 0.08, overwrite: 'auto' });
       animate.to(inst.bar, { scale: 0.92, duration: 0.3 });
       inst.items.forEach(function (item) {
         item.dataset.nbPad = item.style.padding || '';
@@ -738,7 +740,7 @@
       inst.bg.classList.remove('is-minimal');
       animate.to(inst.bar, { scale: 1, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: EXPANDED || '12px 24px', duration: 0.3 }); });
-      animate.to(inst.highlight, { opacity: 1, duration: 0.6 });
+      animate.to(inst.highlight, { opacity: 1, duration: 0.6, overwrite: 'auto' });
       moveHighlightForPadding(inst, EXPANDED || '12px 24px');
       updateContrast(inst);
     }
@@ -758,7 +760,7 @@
       inst.bg.classList.remove('is-minimal');
       animate.to(inst.bar, { scale: 1, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: EXPANDED || '12px 24px', duration: 0.3 }); });
-      animate.to(inst.highlight, { opacity: 1, duration: 0.5 });
+      animate.to(inst.highlight, { opacity: 1, duration: 0.5, overwrite: 'auto' });
       moveHighlightForPadding(inst, EXPANDED || '12px 24px');
       setTextColor(inst, '#ffffff');
     });
@@ -768,7 +770,7 @@
       animate.to(inst.bar, { scale: 0.92, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: COLLAPSED, duration: 0.3 }); });
       moveHighlightForPadding(inst, COLLAPSED);
-      animate.to(inst.highlight, { opacity: 0, duration: 0.08 });
+      animate.to(inst.highlight, { opacity: 0, duration: 0.08, overwrite: 'auto' });
       inst.lastContrastCheck = 0;
       updateContrast(inst);
     });

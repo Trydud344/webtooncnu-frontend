@@ -63,6 +63,13 @@ nav-bar[data-sticky="false"] {
   will-change: transform;
   max-width: 100%;
   overflow: hidden;
+  box-shadow: var(--nb-shadow);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Collapsed (minimal) pill is transparent — no floating shadow. */
+.nb-bar:has(> .nb-bg.is-minimal) {
+  box-shadow: none;
 }
 
 /* Inner mask: painted above the highlight, in pill color, seated at the
@@ -88,7 +95,7 @@ nav-bar[data-sticky="false"] {
   inset: 0;
   border-radius: var(--nb-radius);
   background: var(--nb-bg);
-  box-shadow: var(--nb-shadow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
