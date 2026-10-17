@@ -390,10 +390,10 @@
   function snapHighlight(inst) {
     var active = inst.root.querySelector('.nb-item.active');
     if (!active) return;
-    var barRect = inst.bar.getBoundingClientRect();
-    var itemRect = active.getBoundingClientRect();
+    // offsetLeft/offsetWidth are the bar's own coordinates. getBoundingClientRect
+    // is viewport space and lies while the pill is scaled.
     animate.set(inst.highlight, {
-      left: itemRect.left - barRect.left,
+      left: active.offsetLeft,
       width: active.offsetWidth,
     });
   }
@@ -505,10 +505,9 @@
     el.setItems = function (items) {
       // Fara rebuild daca items sunt neschimbate: renderTemplate recreeaza
       // highlight-ul nepozitionat (sare pe primul buton) pana la urmatorul snap.
-      if (sameItems(items, inst.opts.items)) {
-        setActivePath(inst, el.getAttribute('active') || currentPath(inst.opts.routing));
-        return el;
-      }
+      // Same labels: leave the highlight alone. Re-applying `active` here used
+      // the attribute from before React's update and yanked the pill back.
+      if (sameItems(items, inst.opts.items)) return el;
       // Rebuild real: scapa de listenerii vechi pe window (cei pe bar mor odata cu DOM-ul).
       inst.listeners = inst.listeners.filter(function (l) {
         if (l.t === window && (l.e === 'popstate' || l.e === 'hashchange')) {
@@ -566,9 +565,10 @@
 
   function closestItem(inst, barRect, cursorX) {
     var best = null, min = Infinity;
+    var scaleX = barRect.width / inst.bar.offsetWidth || 1;
     inst.items.forEach(function (item) {
       var r = item.getBoundingClientRect();
-      var cx = r.left - barRect.left + r.width / 2;
+      var cx = (r.left - barRect.left) / scaleX + item.offsetWidth / 2;
       var d = Math.abs(cursorX - cx);
       if (d < min) { min = d; best = { centerX: cx, width: item.offsetWidth, dist: d }; }
     });
@@ -577,7 +577,8 @@
 
   function trackHighlight(inst, ev) {
     var barRect = inst.bar.getBoundingClientRect();
-    var cursorX = ev.clientX - barRect.left;
+    var scaleX = barRect.width / inst.bar.offsetWidth || 1;
+    var cursorX = (ev.clientX - barRect.left) / scaleX;
     var near = closestItem(inst, barRect, cursorX);
     if (!near) return;
     var zone = near.width || 64;
@@ -592,13 +593,35 @@
     animate.to(inst.highlight, { left: left, width: targetW, duration: 0.35 });
   }
 
-  function moveHighlightToActive(inst) {
+  function moveHighlightToActive(inst, duration) {
     var active = inst.root.querySelector('.nb-item.active');
     if (!active) return;
-    var barRect = inst.bar.getBoundingClientRect();
-    var r = active.getBoundingClientRect();
     animate.to(inst.highlight, {
-      left: r.left - barRect.left, width: active.offsetWidth, duration: 0.35,
+      left: active.offsetLeft,
+      width: active.offsetWidth,
+      duration: duration === undefined ? 0.35 : duration,
+      overwrite: 'auto',
+    });
+  }
+
+  // Padding is about to animate to `padding`. Read where the active item
+  // will land and send the highlight there with it, instead of at the size
+  // the labels have this frame (collapsed, just as the page scrolls to top).
+  function moveHighlightForPadding(inst, padding) {
+    var active = inst.root.querySelector('.nb-item.active');
+    if (!active) return;
+    var prev = [];
+    var i;
+    for (i = 0; i < inst.items.length; i++) prev.push(inst.items[i].style.padding);
+    for (i = 0; i < inst.items.length; i++) inst.items[i].style.padding = padding;
+    var left = active.offsetLeft;
+    var width = active.offsetWidth;
+    for (i = 0; i < inst.items.length; i++) inst.items[i].style.padding = prev[i];
+    animate.to(inst.highlight, {
+      left: left,
+      width: width,
+      duration: 0.3,
+      overwrite: 'auto',
     });
   }
 
@@ -668,10 +691,17 @@
   }
 
   function setActivePath(inst, path, silent) {
+    var changed = false;
     inst.items.forEach(function (item) {
-      var href = item.getAttribute('data-href');
-      item.classList.toggle('active', href === path);
+      var on = item.getAttribute('data-href') === path;
+      if (item.classList.contains('active') !== on) {
+        item.classList.toggle('active', on);
+        changed = true;
+      }
     });
+    // Page switches call this again with the item the click already selected.
+    // A second tween restarts the ease and the pill kicks.
+    if (!changed) return;
     if (!silent) moveHighlightToActive(inst);
     else if (inst.root.isConnected) requestAnimationFrame(function () { moveHighlightToActive(inst); });
   }
@@ -699,6 +729,7 @@
         item.dataset.nbPad = item.style.padding || '';
         animate.to(item, { padding: COLLAPSED, duration: 0.3 });
       });
+      moveHighlightForPadding(inst, COLLAPSED);
       updateContrast(inst);
     }
     function toExpanded() {
@@ -708,6 +739,7 @@
       animate.to(inst.bar, { scale: 1, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: EXPANDED || '12px 24px', duration: 0.3 }); });
       animate.to(inst.highlight, { opacity: 1, duration: 0.6 });
+      moveHighlightForPadding(inst, EXPANDED || '12px 24px');
       updateContrast(inst);
     }
     inst._toMinimal = toMinimal;
@@ -727,6 +759,7 @@
       animate.to(inst.bar, { scale: 1, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: EXPANDED || '12px 24px', duration: 0.3 }); });
       animate.to(inst.highlight, { opacity: 1, duration: 0.5 });
+      moveHighlightForPadding(inst, EXPANDED || '12px 24px');
       setTextColor(inst, '#ffffff');
     });
     on(el, el, 'mouseleave', function () {
@@ -734,6 +767,7 @@
       inst.bg.classList.add('is-minimal');
       animate.to(inst.bar, { scale: 0.92, duration: 0.3 });
       inst.items.forEach(function (item) { animate.to(item, { padding: COLLAPSED, duration: 0.3 }); });
+      moveHighlightForPadding(inst, COLLAPSED);
       animate.to(inst.highlight, { opacity: 0, duration: 0.08 });
       inst.lastContrastCheck = 0;
       updateContrast(inst);

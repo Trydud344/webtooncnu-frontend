@@ -85,8 +85,7 @@ export default function App() {
         opacity={1}
         zIndex={50}
       />
-      {/* evenimente isi gestioneaza propriul fade pe grid; fara fade global la incarcare */}
-      <div key={view} className={view === 'evenimente' ? undefined : 'view-enter'}>
+      <div key={view} className="view-enter">
       {view === 'login' ? (
         <Login onBack={() => navigate('acasa')} />
       ) : view === 'evenimente' ? (
