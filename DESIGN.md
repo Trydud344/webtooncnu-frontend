@@ -6,7 +6,7 @@ Principle: only what matters. Text, one background, one divider. No pills, no ca
 
 ```css
 --bg: #6f1a1f;      /* page */
---surface: #2a1415; /* overlay surface: nav, add button, properties panel */
+--surface: #2a1415; /* overlay surface: nav, login */
 --ink: #f4f0f0;     /* text */
 --heading: #fff4f4; /* headings */
 --line: rgba(255, 215, 217, 0.25); /* only divider */
@@ -26,23 +26,6 @@ No other colors. No gradients. No shadows.
 - Hero: centered (`text-align: center`) only on landing. Everything else left-aligned.
 - Sections: `padding: 1.5rem 0; border-bottom: 1px solid var(--line);` Nothing else separates content.
 - Actions row: `display: flex; gap: 1.5rem;` No container, no background.
-
-## Properties panel
-
-`src/components/PropertiesPanel.{jsx,css}`. The one filled surface besides the nav.
-
-- Shape: `--surface` fill, 22px radius, fixed 24px from the left and bottom edges.
-  Collapsed it is the round button that opens it.
-- Lift: the same `box-shadow` as the add button and the widget menu, in both states.
-  Documented exception to the no-shadow rule, like those two.
-- Selection counter centered on top, pager (arrows at the edges, page name centered)
-  at the bottom. Both float over the pages on a `--surface` → transparent gradient,
-  and page content carries the same fade as a `mask-image`, so properties dissolve
-  before they reach the text.
-- One page per concern; the pager label names it, so page content carries no heading.
-- Controls are the plain ones: underline selects, bare icon buttons at `currentColor`,
-  pressed state in `--accent`. No boxes, no pills, no filled toggles.
-- Page changes are scroll-snap, not JS: one scroll handler updates the pager index.
 
 ## Buttons / links — plain text only
 

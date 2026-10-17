@@ -4,7 +4,7 @@
 // Prefixul (gol in dev, /webtooncnu-frontend pe Pages) se pastreaza automat,
 // deci nu e hardcodat nicaieri.
 
-export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'contact', 'platforma', 'login']
+export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'contact', 'login']
 
 function splitPrefix(pathname) {
   const segs = pathname.split('/').filter(Boolean)
