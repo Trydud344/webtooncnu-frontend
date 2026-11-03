@@ -4,10 +4,12 @@ import '../navbarting/nav-bar.css'
 import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
 import Inscriere from './pages/Inscriere.jsx'
+import Admin from './pages/Admin.jsx'
 import Evenimente from './pages/Evenimente.jsx'
+import Editii from './pages/Editii.jsx'
 import { VIEWS, parseRoute, canonicalFor } from './router.js'
 
-const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere').map((v) => ({ label: v, href: `/${v}` }))
+const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin').map((v) => ({ label: v, href: `/${v}` }))
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
@@ -87,12 +89,16 @@ export default function App() {
         zIndex={50}
       />
       <div key={view} className="view-enter">
-      {view === 'login' ? (
+      {view === 'admin' ? (
+        <Admin />
+      ) : view === 'login' ? (
         <Login onBack={() => navigate('acasa')} onSignup={() => navigate('inscriere')} />
       ) : view === 'inscriere' ? (
         <Inscriere onBack={() => navigate('acasa')} />
       ) : view === 'evenimente' ? (
         <Evenimente />
+      ) : view === 'editii' ? (
+        <Editii onSignup={() => navigate('inscriere')} />
       ) : view !== 'acasa' ? (
       <main className="page">
         <header className="hero">

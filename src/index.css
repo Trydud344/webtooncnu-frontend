@@ -198,6 +198,47 @@ body nav-bar {
   border-top: 1px solid var(--line);
 }
 
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 0.35rem 0.4rem;
+  vertical-align: top;
+}
+
+.admin-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0.35rem 0;
+}
+
+.admin-note {
+  font-size: 0.9rem;
+}
+
+.edition-facts {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 0.4rem 1rem;
+  margin: 1rem 0;
+}
+
+.edition-facts dt {
+  color: var(--accent);
+}
+
+.edition-facts dd {
+  margin: 0;
+}
+
 .form-error {
   color: var(--accent);
 }
