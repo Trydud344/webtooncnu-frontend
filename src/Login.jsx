@@ -1,4 +1,4 @@
-export default function Login({ onBack }) {
+export default function Login({ onBack, onSignup }) {
   return (
     <main className="page login-page">
       <header className="hero">
@@ -32,7 +32,9 @@ export default function Login({ onBack }) {
             </a>
           </div>
           <p>
-            <small>ai uitat parola? · creează cont — disponibile în curând</small>
+            <button type="button" className="text-btn" onClick={onSignup}>
+              creează cont
+            </button>
           </p>
         </form>
       </section>

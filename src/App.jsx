@@ -3,10 +3,11 @@ import NavBar from '../navbarting/wrappers/NavBar.jsx'
 import '../navbarting/nav-bar.css'
 import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
+import Inscriere from './pages/Inscriere.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import { VIEWS, parseRoute, canonicalFor } from './router.js'
 
-const ITEMS = VIEWS.filter((v) => v !== 'login').map((v) => ({ label: v, href: `/${v}` }))
+const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere').map((v) => ({ label: v, href: `/${v}` }))
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
@@ -87,7 +88,9 @@ export default function App() {
       />
       <div key={view} className="view-enter">
       {view === 'login' ? (
-        <Login onBack={() => navigate('acasa')} />
+        <Login onBack={() => navigate('acasa')} onSignup={() => navigate('inscriere')} />
+      ) : view === 'inscriere' ? (
+        <Inscriere onBack={() => navigate('acasa')} />
       ) : view === 'evenimente' ? (
         <Evenimente />
       ) : view !== 'acasa' ? (
@@ -122,7 +125,7 @@ export default function App() {
             </small>
           </p>
           <div className="actions">
-            <a className="text-btn" href="#inscriere">înscriere</a>
+            <button type="button" className="text-btn" onClick={() => navigate('inscriere')}>înscriere</button>
             <a className="text-btn" href="#regulament">regulament</a>
             <a className="text-btn" href="#parteneriat">parteneriat</a>
           </div>
