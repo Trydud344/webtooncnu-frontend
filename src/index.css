@@ -33,6 +33,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: "FreeSans", "Helvetica Neue", Arial, sans-serif;
+  transition: background-color 0.55s ease;
 }
 
 .page a,
@@ -66,11 +67,21 @@ body nav-bar {
 /* blur-ul e fixed full-width (target="page"), sub navbar (z 150 vs 500) */
 
 /* buton log in: aceeasi pilula ca navbarul (bg, umbra, inaltime) */
-.login-btn {
+.account-slot {
   position: fixed;
   top: 24px;
   right: 24px;
   z-index: 500;
+  transition: opacity 0.3s ease;
+}
+
+.account-slot.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.login-btn {
+  position: relative;
   background: var(--surface);
   color: #ffffff;
   font-family: inherit;
@@ -86,16 +97,96 @@ body nav-bar {
     0 1px 3px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   cursor: pointer;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, background-color 0.55s ease;
 }
 
 .login-btn:hover {
   background: #3a1d1f;
 }
 
-.login-btn.is-hidden {
-  opacity: 0;
+.account-btn {
+  position: relative;
+  display: block;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.account-btn img,
+.account-fallback {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.account-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   pointer-events: none;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: max-content;
+  min-width: 8.5rem;
+  padding: 6px;
+  background: var(--surface);
+  color: #fff;
+  border-radius: 18px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+  transform-origin: top right;
+  animation: account-pop 0.16s ease;
+}
+
+.account-menu button {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.account-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.account-menu button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@keyframes account-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* highlight interior, mai mic decat pilula — se vede conturul butonului.
@@ -156,8 +247,297 @@ body nav-bar {
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-bottom-color: var(--accent);
+}
+
+.field textarea {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #ffffff;
+  border-radius: 0;
+  padding: 0.5rem 0.25rem;
+  outline: none;
+  width: 100%;
+  resize: vertical;
+}
+
+.board {
+  display: grid;
+  gap: 2rem;
+  padding-top: 5rem;
+}
+
+.board-post {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.board-post h2 {
+  margin: 0;
+}
+
+.board-when {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.board-body {
+  margin: 0.4rem 0 0;
+  white-space: pre-wrap;
+}
+
+.team-shell {
+  --surface: #2a2a2a;
+}
+
+body nav-bar .nb-bg {
+  transition: opacity 0.3s ease, background-color 0.55s ease;
+}
+
+body nav-bar .nb-bar::after {
+  transition: opacity 0.3s ease, border-color 0.55s ease;
+}
+
+body nav-bar .nb-highlight {
+  transition: background-color 0.55s ease, opacity 0.6s ease;
+}
+
+.team-shell nav-bar {
+  position: fixed;
+  top: 24px;
+  left: 0;
+  width: 100%;
+}
+
+.team-shell nav-bar .nb-bg {
+  background-color: #2a2a2a;
+}
+
+.team-shell nav-bar .nb-bar::after {
+  border-color: #2a2a2a;
+}
+
+.team-shell .login-btn {
+  background-color: #2a2a2a;
+}
+
+.team-shell .login-btn:hover {
+  background-color: #3a3a3a;
+}
+
+.team-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  box-sizing: border-box;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 6.75rem 1.25rem 1rem;
+  background: transparent;
+  color: var(--ink);
+}
+
+.team-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+  padding-inline: max(0.625rem, calc((100% - 90ch) / 2 + 0.625rem));
+}
+
+.team-avatar {
+  width: 5.75rem;
+  height: 5.75rem;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  object-fit: cover;
+  background: transparent;
+}
+
+.team-name {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+
+.team-edit {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.team-head .team-edit {
+  margin-left: auto;
+}
+
+.team-edit:hover {
+  text-decoration: underline;
+}
+
+.team-edit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.team-form {
+  flex: none;
+  margin-bottom: 0.85rem;
+}
+
+.team-page .field input {
+  color: inherit;
+  border-bottom-color: currentColor;
+}
+
+.team-page .field input::placeholder {
+  color: currentColor;
+  opacity: 0.45;
+}
+
+.team-frame-slot,
+.team-frame {
+  flex: 1;
+  min-height: 0;
+}
+
+.team-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.team-frame-shell {
+  position: fixed;
+  z-index: 2;
+  margin: 0;
+  background: transparent;
+}
+
+.team-frame-shell .team-frame {
+  flex: none;
+  width: 100%;
+  height: 100%;
+}
+
+.team-frame-shell .team-frame.is-pending {
+  opacity: 0;
+}
+
+.team-loading-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 38%, transparent);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 8%,
+    color-mix(in srgb, currentColor 82%, transparent) 50%,
+    transparent 92%
+  );
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.skeleton-avatar {
+  width: 5.75rem;
+  height: 5.75rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.skeleton-name {
+  width: min(16rem, 46vw);
+  height: 1.35rem;
+  border-radius: 999px;
+}
+
+.skeleton-edit {
+  width: 6.75rem;
+  height: 0.95rem;
+  margin-left: auto;
+  border-radius: 999px;
+}
+
+.skeleton-frame,
+.team-frame-slot.skeleton {
+  flex: 1;
+  min-height: 0;
+  border-radius: 2px;
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.team-frame-open {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.team-frame-close {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 800;
+  border: 0;
+  background: rgba(20, 20, 20, 0.78);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+  padding: 14px 18px;
+  border-radius: 100px;
+  cursor: pointer;
+}
+
+.team-frame-close:hover {
+  background: rgba(40, 40, 40, 0.9);
 }
 
 .field select {
@@ -429,8 +809,23 @@ section.flush {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .grid-fade {
+  .grid-fade,
+  html,
+  body,
+  body nav-bar .nb-bg,
+  body nav-bar .nb-bar::after,
+  body nav-bar .nb-highlight,
+  .login-btn,
+  .account-slot {
     transition: none;
+  }
+
+  .account-menu {
+    animation: none;
+  }
+
+  .skeleton::after {
+    animation: none;
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const TOKEN_KEY = 'wtc_token'
+import { readToken, writeToken } from '../session.js'
 
 const emptyMember = () => ({ full_name: '', unit_name: '', locality: '', school_class: '' })
 const emptyCoordinator = () => ({ full_name: '', email: '', phone: '' })
@@ -110,12 +110,12 @@ export default function Inscriere({ onBack }) {
 
     setBusy(true)
     try {
-      let token = sessionStorage.getItem(TOKEN_KEY)
+      let token = readToken()
       if (!token) {
         await api('/api/auth/signup', { method: 'POST', body: { email, password } })
         const session = await api('/api/auth/login', { method: 'POST', body: { email, password } })
         token = session.token
-        sessionStorage.setItem(TOKEN_KEY, token)
+        writeToken(token)
       }
       await api('/api/me/registration', {
         method: 'PUT',

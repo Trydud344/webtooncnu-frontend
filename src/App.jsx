@@ -5,11 +5,15 @@ import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
 import Inscriere from './pages/Inscriere.jsx'
 import Admin from './pages/Admin.jsx'
+import Platforma from './pages/Platforma.jsx'
+import Echipa from './pages/Echipa.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import Editii from './pages/Editii.jsx'
-import { VIEWS, parseRoute, canonicalFor } from './router.js'
+import AccountButton from './AccountButton.jsx'
+import { VIEWS, PLATFORM_ITEMS, parseRoute, canonicalFor } from './router.js'
 
-const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin').map((v) => ({ label: v, href: `/${v}` }))
+const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin' && v !== 'platforma').map((v) => ({ label: v, href: `/${v}` }))
+const LANDING = new Set(ITEMS.map((item) => item.label))
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
@@ -17,18 +21,24 @@ export default function App() {
   const [atTop, setAtTop] = useState(true)
   // Vedere curenta: sincronizata cu URL-ul (history API, hosting static).
   // Navbarul e routing="off" (doar emite), URL-ul e construit aici.
-  const [view, setView] = useState(() => parseRoute(window.location.pathname).view)
+  const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
+  const view = route.view
+  const section = route.section
 
-  const navigate = (next) => {
-    setView(next)
-    const url = canonicalFor(next, window.location.pathname)
+  const navigate = (next, nextSection) => {
+    const url = canonicalFor(next, window.location.pathname, nextSection)
+    setRoute(parseRoute(url))
     if (window.location.pathname !== url) window.history.pushState(null, '', url)
   }
 
   const go = (detail) => {
     const href = detail && detail.href
-    if (href && VIEWS.includes(href.slice(1))) navigate(href.slice(1))
-    else navigate('acasa')
+    if (!href) {
+      navigate('acasa')
+      return
+    }
+    const next = parseRoute(href)
+    navigate(next.view, next.section)
   }
 
   // La incarcare: normalizeaza URL-ul (/prefix/ -> /prefix/acasa, taie
@@ -36,7 +46,7 @@ export default function App() {
   useEffect(() => {
     const { canonical } = parseRoute(window.location.pathname)
     if (window.location.pathname !== canonical) window.history.replaceState(null, '', canonical)
-    const onPop = () => setView(parseRoute(window.location.pathname).view)
+    const onPop = () => setRoute(parseRoute(window.location.pathname))
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -57,24 +67,23 @@ export default function App() {
   }, [])
 
   return (
-    <div className={view === 'login' ? 'no-nav-highlight' : undefined}>
+    <div className={['', view === 'login' ? 'no-nav-highlight' : '', view === 'platforma' && section === 'echipa' ? 'team-shell' : ''].filter(Boolean).join(' ') || undefined}>
       <NavBar
-        items={ITEMS}
+        items={view === 'platforma' ? PLATFORM_ITEMS : ITEMS}
         routing="off"
-        active={view === 'login' ? '/login' : `/${view}`}
+        active={
+          view === 'platforma'
+            ? (PLATFORM_ITEMS.find((item) => item.section === section)?.href || '/platforma')
+            : view === 'login' ? '/login' : `/${view}`
+        }
         onEvent={go}
       />
-      <button
-        type="button"
-        className={
-          'login-btn' +
-          (!atTop ? ' is-hidden' : '') +
-          (view === 'login' ? ' is-active' : '')
-        }
-        onClick={() => navigate(view === 'login' ? 'acasa' : 'login')}
-      >
-        <span>log in</span>
-      </button>
+      <AccountButton
+        atTop={atTop}
+        active={view === 'login'}
+        onLogin={() => navigate(view === 'login' ? 'acasa' : 'login')}
+        onPlatform={LANDING.has(view) ? () => navigate('platforma') : undefined}
+      />
       {/* Blur full-width: target="page" = fixed pe viewport, 100% latime.
           Navbarul sta deasupra (z 500 vs 150) -> neafectat. */}
       <GradualBlur
@@ -88,11 +97,23 @@ export default function App() {
         opacity={1}
         zIndex={50}
       />
-      <div key={view} className="view-enter">
+      <div key={view === 'platforma' ? `platforma-${section}` : view} className="view-enter">
       {view === 'admin' ? (
         <Admin />
+      ) : view === 'platforma' && section === 'echipa' ? (
+        <Echipa />
+      ) : view === 'platforma' && section === 'noutati' ? (
+        <Platforma />
+      ) : view === 'platforma' ? (
+        <main className="page">
+          <section className="board" aria-label="galerie" />
+        </main>
       ) : view === 'login' ? (
-        <Login onBack={() => navigate('acasa')} onSignup={() => navigate('inscriere')} />
+        <Login
+          onBack={() => navigate('acasa')}
+          onSignup={() => navigate('inscriere')}
+          onEnter={() => navigate('platforma', 'echipa')}
+        />
       ) : view === 'inscriere' ? (
         <Inscriere onBack={() => navigate('acasa')} />
       ) : view === 'evenimente' ? (
@@ -112,7 +133,7 @@ export default function App() {
       ) : (
       <main className="page">
         <header className="hero hero-centered">
-          <h1 className="logo-title"><img src="./logo-v2.png" alt="WEBTOON CNU" /></h1>
+          <h1 className="logo-title"><img src={`${import.meta.env.BASE_URL}logo-v2.png`} alt="WEBTOON CNU" /></h1>
           <p className="lede">
             Locul în care tehnologia se întâlnește cu creativitatea.
           </p>

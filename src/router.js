@@ -4,10 +4,21 @@
 // Prefixul (gol in dev, /webtooncnu-frontend pe Pages) se pastreaza automat,
 // deci nu e hardcodat nicaieri.
 
-export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'contact', 'login', 'inscriere', 'admin']
+export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'contact', 'platforma', 'login', 'inscriere', 'admin']
+
+// Navbarul platformei. noutati sta pe /platforma, ca sa ramana endpointul existent.
+export const PLATFORM_ITEMS = [
+  { label: 'noutati', href: '/platforma', section: 'noutati' },
+  { label: 'galerie', href: '/platforma/galerie', section: 'galerie' },
+  { label: 'echipa mea', href: '/platforma/echipa', section: 'echipa' },
+]
+
+const PLATFORM_SECTIONS = new Set(PLATFORM_ITEMS.map((item) => item.section))
 
 function splitPrefix(pathname) {
   const segs = pathname.split('/').filter(Boolean)
+  const platformAt = segs.indexOf('platforma')
+  if (platformAt !== -1) return { prefix: segs.slice(0, platformAt), last: 'platforma' }
   const last = segs[segs.length - 1]
   if (last !== undefined && VIEWS.includes(last)) return { prefix: segs.slice(0, -1), last }
   // segment necunoscut sau radacina: prefixul se pastreaza la adancime 0-1,
@@ -16,16 +27,36 @@ function splitPrefix(pathname) {
   return { prefix: segs, last }
 }
 
-// -> { view, canonical }; canonical e URL-ul normalizat (fara trailing slash)
-export function parseRoute(pathname) {
-  const { prefix, last } = splitPrefix(pathname)
-  if (last !== undefined && VIEWS.includes(last)) {
-    return { view: last, canonical: '/' + [...prefix, last].join('/') }
+function platformRoute(segs) {
+  const at = segs.indexOf('platforma')
+  const prefix = segs.slice(0, at)
+  const section = segs[at + 1]
+  const known = section && PLATFORM_SECTIONS.has(section) ? section : 'noutati'
+  const tail = known === 'noutati' ? ['platforma'] : ['platforma', known]
+  return {
+    view: 'platforma',
+    section: known,
+    canonical: '/' + [...prefix, ...tail].join('/'),
   }
-  return { view: 'acasa', canonical: '/' + [...prefix, 'acasa'].join('/') }
 }
 
-export function canonicalFor(view, pathname) {
+// -> { view, section, canonical }; canonical e URL-ul normalizat (fara trailing slash)
+export function parseRoute(pathname) {
+  const segs = pathname.split('/').filter(Boolean)
+  if (segs.includes('platforma')) return platformRoute(segs)
+  const { prefix, last } = splitPrefix(pathname)
+  if (last !== undefined && VIEWS.includes(last)) {
+    return { view: last, section: null, canonical: '/' + [...prefix, last].join('/') }
+  }
+  return { view: 'acasa', section: null, canonical: '/' + [...prefix, 'acasa'].join('/') }
+}
+
+export function canonicalFor(view, pathname, section) {
   const { prefix } = splitPrefix(pathname)
+  if (view === 'platforma') {
+    const known = section && PLATFORM_SECTIONS.has(section) ? section : 'noutati'
+    const tail = known === 'noutati' ? ['platforma'] : ['platforma', known]
+    return '/' + [...prefix, ...tail].join('/')
+  }
   return '/' + [...prefix, view].join('/')
 }

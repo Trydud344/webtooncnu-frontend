@@ -84,6 +84,9 @@ export default function Admin() {
   const [albums, setAlbums] = useState([])
   const [albumTitle, setAlbumTitle] = useState('')
   const [albumHref, setAlbumHref] = useState('')
+  const [bulletins, setBulletins] = useState([])
+  const [bulletinTitle, setBulletinTitle] = useState('')
+  const [bulletinBody, setBulletinBody] = useState('')
   const [newEdition, setNewEdition] = useState({
     year_label: '',
     theme: '',
@@ -98,10 +101,11 @@ export default function Admin() {
       if (err.status === 404) return null
       throw err
     })
-    const [editionData, editionList, albumList, inviteData, juryData, teamData, alertData, auditData] = await Promise.all([
+    const [editionData, editionList, albumList, bulletinList, inviteData, juryData, teamData, alertData, auditData] = await Promise.all([
       editionRequest,
       api('/api/admin/editions', { token: activeToken }),
       api('/api/admin/albums', { token: activeToken }),
+      api('/api/admin/bulletins', { token: activeToken }),
       api('/api/admin/invite-codes', { token: activeToken }),
       api('/api/admin/jury', { token: activeToken }),
       api('/api/admin/teams', { token: activeToken }),
@@ -123,6 +127,7 @@ export default function Admin() {
     setEvents(auditData.events)
     setEditions(editionList.editions)
     setAlbums(albumList.albums)
+    setBulletins(bulletinList.bulletins)
   }, [])
 
   useEffect(() => {
@@ -240,6 +245,67 @@ export default function Admin() {
       </header>
       {error ? <p className="form-error">{error}</p> : null}
       {notice ? <p>{notice}</p> : null}
+
+      <section>
+        <h2>anunțuri platformă</h2>
+        <p className="admin-note">
+          Mesajele apar pe pagina platformei, la /platforma, în ordinea publicării, cele mai noi primele.
+        </p>
+        <form
+          className="form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            run(async () => {
+              await api('/api/admin/bulletins', {
+                method: 'POST',
+                token,
+                body: { title: bulletinTitle, body: bulletinBody },
+              })
+              setBulletinTitle('')
+              setBulletinBody('')
+              setNotice('Anunțul a fost publicat.')
+              await load(token)
+            })
+          }}
+        >
+          <label className="field">
+            <span>titlu</span>
+            <input value={bulletinTitle} onChange={(e) => setBulletinTitle(e.target.value)} placeholder="termen de trimitere" />
+          </label>
+          <label className="field">
+            <span>mesaj</span>
+            <textarea value={bulletinBody} onChange={(e) => setBulletinBody(e.target.value)} rows={5} placeholder="Textul anunțului." />
+          </label>
+          <button type="submit" className="text-btn">publică anunțul</button>
+        </form>
+        <table className="admin-table">
+          <thead>
+            <tr><th>titlu</th><th>publicat</th><th></th></tr>
+          </thead>
+          <tbody>
+            {bulletins.map((item) => (
+              <tr key={item.id}>
+                <td>{item.title}</td>
+                <td>{item.created_at ? new Date(item.created_at).toLocaleString('ro-RO') : ''}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="text-btn"
+                    onClick={() => run(async () => {
+                      if (!window.confirm(`Ștergi anunțul ${item.title}?`)) return
+                      await api(`/api/admin/bulletins/${item.id}`, { method: 'DELETE', token })
+                      setNotice('Anunțul a fost șters.')
+                      await load(token)
+                    })}
+                  >
+                    șterge
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <section>
         <h2>albume evenimente</h2>

@@ -2,7 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  base: './',
+  // Pages builds leave this unset and keep relative asset URLs.
+  // The production image sets VITE_BASE=/ so /platforma/echipa still loads /assets.
+  base: process.env.VITE_BASE || './',
   plugins: [react()],
   server: {
     port: 5173,
