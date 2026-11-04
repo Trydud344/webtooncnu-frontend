@@ -18,7 +18,7 @@ export default function Login({ onBack, onSignup, onEnter }) {
       const text = await response.text()
       const data = text ? JSON.parse(text) : null
       if (!response.ok) throw new Error(data?.detail || 'Autentificarea a eșuat.')
-      if (data.account?.role !== 'team') {
+      if (data.account?.role !== 'team' && data.account?.role !== 'jury') {
         await fetch('/api/auth/logout', {
           method: 'POST',
           headers: { authorization: `Bearer ${data.token}` },
@@ -27,7 +27,7 @@ export default function Login({ onBack, onSignup, onEnter }) {
         return
       }
       writeToken(data.token)
-      onEnter()
+      onEnter(data.account)
     } catch (err) {
       setError(err.message === 'Failed to fetch' ? 'API-ul nu răspunde.' : err.message)
     }

@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 const TOKEN_KEY = 'webtooncnu_admin_token'
 
+function profileHref(id) {
+  const segs = window.location.pathname.split('/').filter(Boolean)
+  const at = segs.indexOf('admin')
+  const prefix = at === -1 ? [] : segs.slice(0, at)
+  return '/' + [...prefix, 'echipa', id].join('/')
+}
+
 const NEXT = {
   draft: 'deschisa',
   deschisa: 'jurizare',
@@ -724,6 +731,7 @@ export default function Admin() {
                 <td>{item.account_email}</td>
                 <td>{item.content_status}</td>
                 <td>
+                  <a className="text-btn" href={profileHref(item.registration_id)}>profil</a>
                   <button
                     type="button"
                     className="text-btn"

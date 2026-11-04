@@ -59,7 +59,7 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
         })
         .catch((err) => {
           if (cancelled || current !== generation) return
-          if (err.status === 401 || err.status === 403) writeToken('')
+          if (err.status === 401) writeToken('')
           show('')
         })
     }

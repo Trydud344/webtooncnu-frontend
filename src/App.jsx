@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import NavBar from '../navbarting/wrappers/NavBar.jsx'
 import '../navbarting/nav-bar.css'
 import GradualBlur from './components/GradualBlur.jsx'
@@ -10,10 +10,12 @@ import Echipa from './pages/Echipa.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import Editii from './pages/Editii.jsx'
 import AccountButton from './AccountButton.jsx'
-import { VIEWS, PLATFORM_ITEMS, parseRoute, canonicalFor } from './router.js'
+import { readToken, subscribeAuth } from './session.js'
+import { VIEWS, PLATFORM_ITEMS, parseRoute, canonicalFor, profilePath } from './router.js'
 
 const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin' && v !== 'platforma').map((v) => ({ label: v, href: `/${v}` }))
 const LANDING = new Set(ITEMS.map((item) => item.label))
+const RETURN_KEY = 'wtc_return'
 
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
@@ -22,8 +24,22 @@ export default function App() {
   // Vedere curenta: sincronizata cu URL-ul (history API, hosting static).
   // Navbarul e routing="off" (doar emite), URL-ul e construit aici.
   const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
+  const [ownProfileId, setOwnProfileId] = useState('')
   const view = route.view
   const section = route.section
+  const onOwnProfile = view === 'echipa' && Boolean(ownProfileId) && route.profileId === ownProfileId
+  const platformItems = useMemo(() => PLATFORM_ITEMS.map((item) => (
+    item.section === 'echipa' && ownProfileId
+      ? { ...item, href: profilePath(ownProfileId, window.location.pathname) }
+      : item
+  )), [ownProfileId])
+
+  const openProfile = (id) => {
+    const url = profilePath(id, window.location.pathname)
+    const next = parseRoute(url)
+    setRoute(next)
+    if (window.location.pathname !== next.canonical) window.history.pushState(null, '', next.canonical)
+  }
 
   const navigate = (next, nextSection) => {
     const url = canonicalFor(next, window.location.pathname, nextSection)
@@ -37,7 +53,32 @@ export default function App() {
       navigate('acasa')
       return
     }
+    if (href === '/platforma/echipa' || href.endsWith('/platforma/echipa')) {
+      if (ownProfileId) {
+        openProfile(ownProfileId)
+        return
+      }
+      const token = readToken()
+      if (!token) {
+        navigate('login')
+        return
+      }
+      fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (!data?.id) return
+          setOwnProfileId(data.id)
+          openProfile(data.id)
+        })
+        .catch(() => {})
+      return
+    }
     const next = parseRoute(href)
+    if (next.view === 'echipa' && next.profileId) {
+      setRoute(next)
+      if (window.location.pathname !== next.canonical) window.history.pushState(null, '', next.canonical)
+      return
+    }
     navigate(next.view, next.section)
   }
 
@@ -50,6 +91,30 @@ export default function App() {
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
+
+  useEffect(() => {
+    const load = () => {
+      const token = readToken()
+      if (!token) {
+        setOwnProfileId('')
+        return
+      }
+      fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => setOwnProfileId(data?.id || ''))
+        .catch(() => setOwnProfileId(''))
+    }
+    load()
+    return subscribeAuth(load)
+  }, [])
+
+  useEffect(() => {
+    if (view !== 'platforma' || section !== 'echipa' || !ownProfileId) return
+    const url = profilePath(ownProfileId, window.location.pathname)
+    const next = parseRoute(url)
+    setRoute(next)
+    if (window.location.pathname !== next.canonical) window.history.replaceState(null, '', next.canonical)
+  }, [view, section, ownProfileId])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -67,13 +132,13 @@ export default function App() {
   }, [])
 
   return (
-    <div className={['', view === 'login' ? 'no-nav-highlight' : '', view === 'platforma' && section === 'echipa' ? 'team-shell' : ''].filter(Boolean).join(' ') || undefined}>
+    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : ''].filter(Boolean).join(' ') || undefined}>
       <NavBar
-        items={view === 'platforma' ? PLATFORM_ITEMS : ITEMS}
+        items={view === 'platforma' || onOwnProfile ? platformItems : ITEMS}
         routing="off"
         active={
-          view === 'platforma'
-            ? (PLATFORM_ITEMS.find((item) => item.section === section)?.href || '/platforma')
+          view === 'platforma' || onOwnProfile
+            ? (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma')
             : view === 'login' ? '/login' : `/${view}`
         }
         onEvent={go}
@@ -81,7 +146,11 @@ export default function App() {
       <AccountButton
         atTop={atTop}
         active={view === 'login'}
-        onLogin={() => navigate(view === 'login' ? 'acasa' : 'login')}
+        onLogin={() => {
+          if (view === 'echipa') sessionStorage.setItem(RETURN_KEY, window.location.pathname)
+          else sessionStorage.removeItem(RETURN_KEY)
+          navigate(view === 'login' ? 'acasa' : 'login')
+        }}
         onPlatform={LANDING.has(view) ? () => navigate('platforma') : undefined}
       />
       {/* Blur full-width: target="page" = fixed pe viewport, 100% latime.
@@ -97,9 +166,11 @@ export default function App() {
         opacity={1}
         zIndex={50}
       />
-      <div key={view === 'platforma' ? `platforma-${section}` : view} className="view-enter">
+      <div key={view === 'echipa' ? `echipa-${route.profileId}` : view === 'platforma' ? `platforma-${section}` : view} className="view-enter">
       {view === 'admin' ? (
         <Admin />
+      ) : view === 'echipa' ? (
+        <Echipa profileId={route.profileId} />
       ) : view === 'platforma' && section === 'echipa' ? (
         <Echipa />
       ) : view === 'platforma' && section === 'noutati' ? (
@@ -112,7 +183,30 @@ export default function App() {
         <Login
           onBack={() => navigate('acasa')}
           onSignup={() => navigate('inscriere')}
-          onEnter={() => navigate('platforma', 'echipa')}
+          onEnter={(account) => {
+            const back = sessionStorage.getItem(RETURN_KEY)
+            sessionStorage.removeItem(RETURN_KEY)
+            if (account?.role === 'jury') {
+              if (back) {
+                window.history.pushState(null, '', back)
+                setRoute(parseRoute(back))
+                return
+              }
+              navigate('acasa')
+              return
+            }
+            fetch('/api/me/profile', { headers: { authorization: `Bearer ${readToken()}` } })
+              .then((response) => (response.ok ? response.json() : null))
+              .then((data) => {
+                if (!data?.id) {
+                  navigate('platforma')
+                  return
+                }
+                setOwnProfileId(data.id)
+                openProfile(data.id)
+              })
+              .catch(() => navigate('platforma'))
+          }}
         />
       ) : view === 'inscriere' ? (
         <Inscriere onBack={() => navigate('acasa')} />

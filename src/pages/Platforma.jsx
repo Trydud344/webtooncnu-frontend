@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ContestCalendar from '../components/ContestCalendar.jsx'
 
 function formatWhen(iso) {
   if (!iso) return ''
@@ -38,7 +39,8 @@ export default function Platforma() {
   }, [])
 
   return (
-    <main className="page">
+    <main className="page platform-page">
+      <ContestCalendar />
       <section className="board" aria-label="anunțuri">
         {error ? <p className="form-error">{error}</p> : null}
         {posts === null && !error ? <p>Se încarcă anunțurile…</p> : null}

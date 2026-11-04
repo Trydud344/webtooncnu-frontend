@@ -1,0 +1,235 @@
+.contest-cal {
+  width: 100%;
+  margin: 0.35rem auto 0;
+  padding-inline: 5.5rem;
+  overscroll-behavior-x: contain;
+}
+
+.contest-cal__frame {
+  position: relative;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid #402426;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.contest-cal__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease, color 0.15s ease;
+}
+
+.contest-cal:hover .contest-cal__nav,
+.contest-cal:focus-within .contest-cal__nav {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.contest-cal__nav--prev {
+  left: 0;
+}
+
+.contest-cal__nav--next {
+  right: 0;
+}
+
+.contest-cal__nav:hover {
+  color: var(--accent);
+}
+
+.contest-cal__nav:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+.contest-cal__viewport {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.contest-cal__viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.contest-cal__track {
+  display: flex;
+  width: 100%;
+}
+
+.contest-cal__sheet {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.contest-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 2.6rem repeat(6, 5.2rem);
+}
+
+.contest-cal__head,
+.contest-cal__cell {
+  border-right: 1px solid #402426;
+  border-bottom: 1px solid #402426;
+}
+
+.contest-cal__head:nth-child(7n),
+.contest-cal__cell:nth-child(7n) {
+  border-right: 0;
+}
+
+.contest-cal__grid > :nth-last-child(-n + 7) {
+  border-bottom: 0;
+}
+
+.contest-cal__head {
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  color: #c9adad;
+}
+
+.contest-cal__cell {
+  min-height: 0;
+  padding: 0.4rem 0.35rem 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+
+.contest-cal__num {
+  margin: 0.45rem 0.35rem 0 0.4rem;
+  font-family: "FreeSans", "Helvetica Neue", Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+  color: #c9adad;
+}
+
+.contest-cal__tags {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  width: 100%;
+}
+
+.contest-cal__tag {
+  font-size: 0.78rem;
+  line-height: 1.15;
+  color: #c9adad;
+}
+
+.contest-cal__cell.is-mark {
+  background: rgba(255, 215, 217, 0.14);
+}
+
+.contest-cal__cell.is-today {
+  background: var(--accent);
+}
+
+.contest-cal__cell.is-today .contest-cal__num,
+.contest-cal__cell.is-today .contest-cal__tag {
+  color: var(--dark);
+}
+
+.contest-cal__month {
+  margin: 0.95rem 0 0;
+  text-align: center;
+  font-family: "Silkscreen", sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.8rem, 4.2vw, 2.6rem);
+  line-height: 1.1;
+  color: var(--heading);
+}
+
+.contest-cal__year {
+  margin-left: 0.4em;
+  font-size: 0.55em;
+  color: var(--accent);
+}
+
+.contest-cal__until {
+  margin: 0.45rem 0 0;
+  text-align: center;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: #c9adad;
+}
+
+.contest-cal__until-count {
+  color: var(--heading);
+}
+
+.page.platform-page {
+  max-width: 1120px;
+}
+
+.platform-page .board {
+  max-width: 90ch;
+  width: 100%;
+  margin-inline: auto;
+  padding-top: 1.75rem;
+}
+
+@media (max-width: 720px) {
+  .contest-cal {
+    padding-inline: 0.75rem;
+  }
+
+  .contest-cal__frame {
+    border-radius: 22px;
+  }
+
+  .contest-cal__grid {
+    grid-template-rows: 1.75rem repeat(6, 3.35rem);
+  }
+
+  .contest-cal__cell {
+    padding: 0.22rem 0.12rem 0.16rem;
+  }
+
+  .contest-cal__num {
+    margin: 0.12rem 0.08rem 0 0.1rem;
+  }
+
+  .contest-cal__tag {
+    font-size: 0.58rem;
+  }
+
+  .contest-cal__head {
+    font-size: 0.65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contest-cal__nav {
+    transition: none;
+  }
+}

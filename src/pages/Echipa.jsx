@@ -3,6 +3,57 @@ import { createPortal } from 'react-dom'
 import { gsap } from 'gsap'
 import { notifyProfile, readToken, subscribeAuth, writeToken } from '../session.js'
 
+const ADMIN_TOKEN_KEY = 'webtooncnu_admin_token'
+const UNIT_LABELS = {
+  scoala: 'Școală',
+  club: 'Club',
+  palat: 'Palat',
+  centru_excelenta: 'Centru de Excelență',
+}
+
+function authHeaders(token) {
+  return token ? { authorization: `Bearer ${token}` } : {}
+}
+
+function detailLine(label, value) {
+  if (value === null || value === undefined || value === '') return null
+  return (
+    <p>
+      <span>{label}</span> {value}
+    </p>
+  )
+}
+
+function AccountDossier({ account }) {
+  const registration = account.registration || {}
+  const members = registration.members || []
+  const coordinators = registration.coordinators || []
+  const section = [registration.section_label, registration.subsection_label].filter(Boolean).join(' · ')
+  return (
+    <section className="team-dossier">
+      {detailLine('email', account.email)}
+      {detailLine('nume', account.full_name)}
+      {detailLine('instituție', account.institution)}
+      {detailLine('secțiune', section)}
+      {detailLine('școală', registration.primary_unit_name)}
+      {detailLine('localitate', registration.primary_locality)}
+      {detailLine('județ', registration.primary_county)}
+      {detailLine('unitate', UNIT_LABELS[registration.unit_type] || registration.unit_type)}
+      {detailLine('statut', registration.content_status)}
+      {detailLine('GDPR', registration.gdpr_consent ? 'da' : 'nu')}
+      {detailLine('parteneriat', registration.partnership_ack ? 'da' : 'nu')}
+      {members.length ? <h2>membri</h2> : null}
+      {members.map((member) => (
+        <p key={member.id}>{[member.full_name, member.unit_name, member.school_class].filter(Boolean).join(' · ')}</p>
+      ))}
+      {coordinators.length ? <h2>coordonatori</h2> : null}
+      {coordinators.map((coordinator) => (
+        <p key={coordinator.id}>{[coordinator.full_name, coordinator.email, coordinator.phone].filter(Boolean).join(' · ')}</p>
+      ))}
+    </section>
+  )
+}
+
 function inkFor(color) {
   if (!color || color.length < 7) return '#f4f0f0'
   const red = Number.parseInt(color.slice(1, 3), 16)
@@ -65,8 +116,11 @@ function fillSlot(el, slot) {
   })
 }
 
-export default function Echipa() {
+export default function Echipa({ profileId = '' }) {
+  const shared = Boolean(profileId)
   const [token, setToken] = useState(readToken)
+  const [access, setAccess] = useState(shared ? 'loading' : 'owner')
+  const [visibilitySaving, setVisibilitySaving] = useState(false)
   const [profile, setProfile] = useState(null)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [error, setError] = useState('')
@@ -87,6 +141,7 @@ export default function Echipa() {
   const openRef = useRef(false)
   const revealRef = useRef(false)
   const loadedFrame = useRef('')
+  const pageRef = useRef(null)
 
   useEffect(() => {
     const color = profile?.page_background || ''
@@ -102,14 +157,15 @@ export default function Echipa() {
   }, [profile?.page_background])
 
   useEffect(() => {
+    if (shared) return undefined
     setToken(readToken())
     return subscribeAuth(() => setToken(readToken()))
-  }, [])
+  }, [shared])
 
   useEffect(() => {
-    if (!token) return undefined
+    if (shared || !token) return undefined
     let cancelled = false
-    fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+    fetch('/api/me/profile', { headers: authHeaders(token) })
       .then(readJson)
       .then((data) => {
         if (cancelled) return
@@ -118,23 +174,72 @@ export default function Echipa() {
       })
       .catch((err) => {
         if (cancelled) return
-        if (err.status === 401 || err.status === 403) writeToken('')
+        if (err.status === 401) writeToken('')
         setError(err.message)
         setPhase('ready')
       })
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [token, shared])
 
   useEffect(() => {
-    if (!token || !profile?.has_avatar) {
+    if (!shared) return undefined
+    let cancelled = false
+    const teamToken = readToken()
+    const adminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''
+    const attempts = []
+    if (adminToken) attempts.push(adminToken)
+    if (teamToken && teamToken !== adminToken) attempts.push(teamToken)
+    attempts.push('')
+    const load = async () => {
+      for (const candidate of attempts) {
+        try {
+          const data = await readJson(
+            await fetch(`/api/profiles/${profileId}`, { headers: authHeaders(candidate) }),
+          )
+          if (cancelled) return
+          let view = data
+          if (teamToken) {
+            try {
+              const mine = await readJson(
+                await fetch('/api/me/profile', { headers: authHeaders(teamToken) }),
+              )
+              if (mine?.id === profileId) view = { ...data, ...mine }
+            } catch {
+              view = data
+            }
+          }
+          if (cancelled) return
+          setToken(view.id === profileId && teamToken ? teamToken : candidate)
+          setProfile(view)
+          setAccess('ok')
+          if (!view.has_avatar) setPhase('ready')
+          return
+        } catch {
+          // A missing profile answers like a private one.
+        }
+      }
+      if (cancelled) return
+      setProfile(null)
+      setAccess('private')
+      setPhase('ready')
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [shared, profileId])
+
+  useEffect(() => {
+    if (!profile?.has_avatar || (!shared && !token)) {
       setAvatarUrl('')
       return undefined
     }
     let cancelled = false
     let objectUrl = ''
-    fetch('/api/me/profile/avatar', { headers: { authorization: `Bearer ${token}` } })
+    const avatarPath = shared ? `/api/profiles/${profileId}/avatar` : '/api/me/profile/avatar'
+    fetch(avatarPath, { headers: authHeaders(token) })
       .then((response) => {
         if (!response.ok) throw new Error('Poza nu poate fi încărcată.')
         return response.blob()
@@ -154,7 +259,7 @@ export default function Echipa() {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [token, profile])
+  }, [token, profile, shared, profileId])
 
   useEffect(() => () => tweenRef.current?.kill(), [])
 
@@ -187,11 +292,14 @@ export default function Echipa() {
     const observer = new ResizeObserver(place)
     observer.observe(slot)
     window.addEventListener('resize', place)
+    const page = pageRef.current
+    page?.addEventListener('scroll', place, { passive: true })
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', place)
+      page?.removeEventListener('scroll', place)
     }
-  }, [open, editing, profile?.embed_url, phase])
+  }, [open, editing, profile?.embed_url, profile?.account, phase])
 
   useLayoutEffect(() => {
     if (!settled || !closeRef.current) return undefined
@@ -273,6 +381,21 @@ export default function Echipa() {
     setEditing(true)
   }
 
+  const toggleVisibility = () => {
+    if (!token || !profile || visibilitySaving) return
+    setVisibilitySaving(true)
+    setError('')
+    fetch('/api/me/profile/visibility', {
+      method: 'PATCH',
+      headers: { ...authHeaders(token), 'content-type': 'application/json' },
+      body: JSON.stringify({ public: !profile.public }),
+    })
+      .then(readJson)
+      .then(setProfile)
+      .catch((err) => setError(err.message))
+      .finally(() => setVisibilitySaving(false))
+  }
+
   const save = (event) => {
     event.preventDefault()
     const body = new FormData()
@@ -296,7 +419,7 @@ export default function Echipa() {
       .finally(() => setSaving(false))
   }
 
-  if (!token) {
+  if (!shared && !token) {
     return (
       <main className="page">
         <section className="board">
@@ -305,6 +428,18 @@ export default function Echipa() {
       </main>
     )
   }
+
+  if (shared && access === 'private') {
+    return (
+      <main className="page">
+        <section className="board">
+          <p>Această pagină este privată.</p>
+        </section>
+      </main>
+    )
+  }
+
+  const mine = !shared || profile?.id === profileId
 
   const background = profile?.page_background || ''
   const displayName = profile?.title || 'Numele echipei vine aici'
@@ -316,7 +451,8 @@ export default function Echipa() {
 
   return (
     <main
-      className="team-page"
+      ref={pageRef}
+      className={['team-page', profile?.account ? 'has-account' : ''].filter(Boolean).join(' ')}
       aria-busy={showSkeleton || undefined}
       style={background ? { color: inkFor(background) } : undefined}
     >
@@ -337,7 +473,14 @@ export default function Echipa() {
                 <span className="team-avatar" aria-hidden="true" />
               )}
               <h1 className="team-name">{displayName}</h1>
-              <button type="button" className="team-edit" onClick={openEdit}>Editare Profil</button>
+              {mine ? (
+                <div className="team-actions">
+                  <button type="button" className="team-edit" onClick={toggleVisibility} disabled={visibilitySaving}>
+                    {profile?.public ? 'public' : 'privat'}
+                  </button>
+                  <button type="button" className="team-edit" onClick={openEdit}>Editare Profil</button>
+                </div>
+              ) : null}
             </>
           )}
         </header>
@@ -376,6 +519,7 @@ export default function Echipa() {
         ) : (
           <div className="team-frame" />
         )}
+        {profile?.account ? <AccountDossier account={profile.account} /> : null}
       </div>
       {profile?.embed_url
         ? createPortal(
