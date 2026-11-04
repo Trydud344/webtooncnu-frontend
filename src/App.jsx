@@ -10,7 +10,8 @@ import Echipa from './pages/Echipa.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import Editii from './pages/Editii.jsx'
 import AccountButton from './AccountButton.jsx'
-import { readToken, subscribeAuth } from './session.js'
+import RepairPanel from './components/RepairPanel.jsx'
+import { notifyProfile, readToken, subscribeAuth, subscribeProfile } from './session.js'
 import { VIEWS, PLATFORM_ITEMS, parseRoute, canonicalFor, profilePath } from './router.js'
 
 const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin' && v !== 'platforma').map((v) => ({ label: v, href: `/${v}` }))
@@ -25,6 +26,8 @@ export default function App() {
   // Navbarul e routing="off" (doar emite), URL-ul e construit aici.
   const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
   const [ownProfileId, setOwnProfileId] = useState('')
+  const [missing, setMissing] = useState([])
+  const [repairing, setRepairing] = useState(false)
   const view = route.view
   const section = route.section
   const onOwnProfile = view === 'echipa' && Boolean(ownProfileId) && route.profileId === ownProfileId
@@ -97,15 +100,27 @@ export default function App() {
       const token = readToken()
       if (!token) {
         setOwnProfileId('')
+        setMissing([])
         return
       }
       fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
         .then((response) => (response.ok ? response.json() : null))
-        .then((data) => setOwnProfileId(data?.id || ''))
-        .catch(() => setOwnProfileId(''))
+        .then((data) => {
+          setOwnProfileId(data?.id || '')
+          setMissing(Array.isArray(data?.missing) ? data.missing : [])
+        })
+        .catch(() => {
+          setOwnProfileId('')
+          setMissing([])
+        })
     }
     load()
-    return subscribeAuth(load)
+    const stopAuth = subscribeAuth(load)
+    const stopProfile = subscribeProfile(load)
+    return () => {
+      stopAuth()
+      stopProfile()
+    }
   }, [])
 
   useEffect(() => {
@@ -131,8 +146,11 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  const onPlatform = view === 'platforma' || onOwnProfile
+  const showGap = onPlatform && missing.length > 0
+
   return (
-    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : ''].filter(Boolean).join(' ') || undefined}>
+    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
       <NavBar
         items={view === 'platforma' || onOwnProfile ? platformItems : ITEMS}
         routing="off"
@@ -166,6 +184,22 @@ export default function App() {
         opacity={1}
         zIndex={50}
       />
+      {showGap ? (
+        <p className="platform-gap">
+          <span>!!! Lipsesc date obligatorii. Echipa nu va intra în faza de jurizare. !!!</span>
+          <button type="button" className="team-edit" onClick={() => setRepairing(true)}>repara acum</button>
+        </p>
+      ) : null}
+      {repairing ? (
+        <RepairPanel
+          onClose={() => setRepairing(false)}
+          onSaved={(nextMissing) => {
+            setMissing(nextMissing)
+            notifyProfile()
+            if (!nextMissing.length) setRepairing(false)
+          }}
+        />
+      ) : null}
       <div key={view === 'echipa' ? `echipa-${route.profileId}` : view === 'platforma' ? `platforma-${section}` : view} className="view-enter">
       {view === 'admin' ? (
         <Admin />

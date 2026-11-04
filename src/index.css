@@ -403,6 +403,90 @@ body nav-bar .nb-highlight {
   margin-left: auto;
 }
 
+.platform-gap {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 0.75rem auto 0;
+  padding: 0.45rem 1.15rem;
+  border-radius: 999px;
+  background: #c4161c;
+  color: var(--heading);
+  text-align: center;
+}
+
+.team-shell .platform-gap {
+  position: fixed;
+  top: 6.35rem;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  margin: 0 auto;
+}
+
+.team-shell.has-gap .team-page {
+  padding-top: 10rem;
+}
+
+.repair-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: color-mix(in srgb, #000 46%, transparent);
+}
+
+.repair-panel {
+  width: min(28rem, 100%);
+  max-height: calc(100dvh - 3rem);
+  overflow: auto;
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 1.25rem 1.35rem;
+  border-radius: 1.25rem;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.repair-panel .field input,
+.repair-panel .field select {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+.repair-person {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.repair-save {
+  justify-self: end;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.repair-save:hover {
+  text-decoration: underline;
+}
+
+.repair-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .team-page.has-account {
   overflow: auto;
 }
