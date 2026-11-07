@@ -1,18 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { gsap } from 'gsap'
-import { notifyProfile, readToken, subscribeAuth, writeToken } from '../session.js'
-
-const ADMIN_TOKEN_KEY = 'webtooncnu_admin_token'
+import { notifyProfile, readSignedIn, subscribeAuth, subscribeProfile, writeSignedIn } from '../session.js'
+import { useTurnstile, withTurnstile } from '../turnstile.js'
 const UNIT_LABELS = {
   scoala: 'Școală',
   club: 'Club',
   palat: 'Palat',
   centru_excelenta: 'Centru de Excelență',
-}
-
-function authHeaders(token) {
-  return token ? { authorization: `Bearer ${token}` } : {}
 }
 
 function detailLine(label, value) {
@@ -75,6 +70,170 @@ async function readJson(response) {
   return data
 }
 
+function megabytes(bytes) {
+  return (bytes / (1024 * 1024)).toLocaleString('ro-RO', { maximumFractionDigits: 1 })
+}
+
+function fileSize(bytes) {
+  if (bytes < 100 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${megabytes(bytes)} MB`
+}
+
+function formatWhen(iso) {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('ro-RO', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function WorkFolder() {
+  const [folder, setFolder] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [canva, setCanva] = useState('')
+  const submissionCheck = useTurnstile('submission')
+
+  const load = () => {
+    fetch('/api/me/submissions', { credentials: 'include' })
+      .then(readJson)
+      .then(setFolder)
+      .catch((err) => setError(err.message))
+  }
+
+  useEffect(() => {
+    load()
+    return subscribeProfile(load)
+  }, [])
+
+  useEffect(() => {
+    if (!folder || window.location.hash !== '#lucrare') return
+    document.getElementById('lucrare')?.scrollIntoView()
+  }, [folder])
+
+  const upload = (event) => {
+    event.preventDefault()
+    const file = event.target.elements.pdf.files?.[0]
+    if (!file) return
+    const body = new FormData()
+    body.append('pdf', file)
+    body.append('canva', canva)
+    setBusy(true)
+    setError('')
+    withTurnstile(submissionCheck, (turnstile_token) => {
+      body.append('turnstile_token', turnstile_token)
+      return fetch('/api/me/submissions', { method: 'POST', credentials: 'include', body })
+    })
+      .then(readJson)
+      .then((data) => {
+        setFolder(data)
+        setCanva('')
+        event.target.reset()
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setBusy(false))
+  }
+
+  const choose = (id) => {
+    setBusy(true)
+    setError('')
+    fetch(`/api/me/submissions/${id}/choose`, { method: 'POST', credentials: 'include' })
+      .then(readJson)
+      .then(setFolder)
+      .catch((err) => setError(err.message))
+      .finally(() => setBusy(false))
+  }
+
+  const remove = (id) => {
+    if (!window.confirm('Ștergi această versiune?')) return
+    setBusy(true)
+    setError('')
+    fetch(`/api/me/submissions/${id}`, { method: 'DELETE', credentials: 'include' })
+      .then(readJson)
+      .then(setFolder)
+      .catch((err) => setError(err.message))
+      .finally(() => setBusy(false))
+  }
+
+  const download = (version) => {
+    setError('')
+    fetch(`/api/me/submissions/${version.id}/file`, { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => null)
+          throw new Error(data?.detail || 'Fișierul nu poate fi descărcat.')
+        }
+        return response.blob()
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = version.pdf_name || 'lucrare.pdf'
+        link.click()
+        URL.revokeObjectURL(url)
+      })
+      .catch((err) => setError(err.message))
+  }
+
+  if (!folder && !error) return null
+  return (
+    <section className="team-works" id="lucrare" aria-label="lucrare">
+      <h2>lucrare</h2>
+      {folder ? <p>{megabytes(folder.used_bytes)} / {megabytes(folder.quota_bytes)} MB</p> : null}
+      {error ? <p className="form-error">{error}</p> : null}
+      {folder?.open && folder?.ready ? (
+        <form className="form" onSubmit={upload}>
+          <label className="field">
+            <span>pdf</span>
+            <input name="pdf" type="file" accept="application/pdf,.pdf" required />
+          </label>
+          <label className="field">
+            <span>canva</span>
+            <textarea value={canva} onChange={(event) => setCanva(event.target.value)} rows={4} />
+          </label>
+          <div className="turnstile-group">
+            <div ref={submissionCheck.containerRef} className="turnstile" />
+          </div>
+          <button type="submit" className="team-edit" disabled={busy}>încarcă</button>
+        </form>
+      ) : null}
+      {folder?.versions?.length ? (
+        <ul>
+          {folder.versions.map((version) => (
+            <li key={version.id} className="team-work">
+              <span>{formatWhen(version.created_at)}</span>
+              <span>{version.kind === 'canva' ? 'canva' : 'pdf'}</span>
+              <span>{fileSize(version.pdf_size)}</span>
+              {version.chosen ? <span>aleasă</span> : null}
+              <button type="button" className="team-edit" onClick={() => download(version)}>descarcă</button>
+              {folder.open && !version.chosen ? (
+                <button type="button" className="team-edit" onClick={() => choose(version.id)} disabled={busy}>alege</button>
+              ) : null}
+              {folder.open ? (
+                <button type="button" className="team-edit" onClick={() => remove(version.id)} disabled={busy}>șterge</button>
+              ) : null}
+              {version.embed_url ? (
+                <iframe
+                  src={version.embed_url}
+                  title={version.pdf_name || 'canva'}
+                  loading="lazy"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                  allow="fullscreen"
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  )
+}
+
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
@@ -118,12 +277,14 @@ function fillSlot(el, slot) {
 
 export default function Echipa({ profileId = '' }) {
   const shared = Boolean(profileId)
-  const [token, setToken] = useState(readToken)
+  const [signedIn, setSignedIn] = useState(readSignedIn)
   const [access, setAccess] = useState(shared ? 'loading' : 'owner')
   const [visibilitySaving, setVisibilitySaving] = useState(false)
   const [profile, setProfile] = useState(null)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [error, setError] = useState('')
+  const [archived, setArchived] = useState(false)
+  const [owns, setOwns] = useState(false)
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [canvasUrl, setCanvasUrl] = useState('')
@@ -142,6 +303,7 @@ export default function Echipa({ profileId = '' }) {
   const revealRef = useRef(false)
   const loadedFrame = useRef('')
   const pageRef = useRef(null)
+  const profileCheck = useTurnstile('profile')
 
   useEffect(() => {
     const color = profile?.page_background || ''
@@ -158,72 +320,85 @@ export default function Echipa({ profileId = '' }) {
 
   useEffect(() => {
     if (shared) return undefined
-    setToken(readToken())
-    return subscribeAuth(() => setToken(readToken()))
+    setSignedIn(readSignedIn())
+    return subscribeAuth(() => setSignedIn(readSignedIn()))
   }, [shared])
 
   useEffect(() => {
-    if (shared || !token) return undefined
+    if (!signedIn) {
+      setArchived(false)
+      return undefined
+    }
     let cancelled = false
-    fetch('/api/me/profile', { headers: authHeaders(token) })
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled) setArchived(Boolean(data?.account?.archived))
+      })
+      .catch(() => {
+        if (!cancelled) setArchived(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [signedIn])
+
+  useEffect(() => {
+    if (shared || !signedIn) return undefined
+    let cancelled = false
+    fetch('/api/me/profile', { credentials: 'include' })
       .then(readJson)
       .then((data) => {
         if (cancelled) return
         setProfile(data)
+        setOwns(true)
         if (!data.has_avatar) setPhase('ready')
       })
       .catch((err) => {
         if (cancelled) return
-        if (err.status === 401) writeToken('')
+        if (err.status === 401) {
+          writeSignedIn(false)
+          setOwns(false)
+        }
         setError(err.message)
         setPhase('ready')
       })
     return () => {
       cancelled = true
     }
-  }, [token, shared])
+  }, [signedIn, shared])
 
   useEffect(() => {
     if (!shared) return undefined
     let cancelled = false
-    const teamToken = readToken()
-    const adminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''
-    const attempts = []
-    if (adminToken) attempts.push(adminToken)
-    if (teamToken && teamToken !== adminToken) attempts.push(teamToken)
-    attempts.push('')
     const load = async () => {
-      for (const candidate of attempts) {
+      try {
+        const data = await readJson(
+          await fetch(`/api/profiles/${profileId}`, { credentials: 'include' }),
+        )
+        if (cancelled) return
+        let view = data
         try {
-          const data = await readJson(
-            await fetch(`/api/profiles/${profileId}`, { headers: authHeaders(candidate) }),
+          const mine = await readJson(
+            await fetch('/api/me/profile', { credentials: 'include' }),
           )
-          if (cancelled) return
-          let view = data
-          if (teamToken) {
-            try {
-              const mine = await readJson(
-                await fetch('/api/me/profile', { headers: authHeaders(teamToken) }),
-              )
-              if (mine?.id === profileId) view = { ...data, ...mine }
-            } catch {
-              view = data
-            }
-          }
-          if (cancelled) return
-          setToken(view.id === profileId && teamToken ? teamToken : candidate)
-          setProfile(view)
-          setAccess('ok')
-          if (!view.has_avatar) setPhase('ready')
-          return
+          if (mine?.id === profileId) view = { ...data, ...mine }
+          if (!cancelled) setOwns(mine?.id === profileId)
         } catch {
-          // A missing profile answers like a private one.
+          view = data
+          if (!cancelled) setOwns(false)
         }
+        if (cancelled) return
+        setSignedIn(Boolean(view.id && view.id === profileId) || readSignedIn())
+        setProfile(view)
+        setAccess('ok')
+        if (!view.has_avatar) setPhase('ready')
+      } catch {
+        if (cancelled) return
+        setProfile(null)
+        setAccess('private')
+        setPhase('ready')
       }
-      if (cancelled) return
-      setProfile(null)
-      setAccess('private')
-      setPhase('ready')
     }
     load()
     return () => {
@@ -232,14 +407,14 @@ export default function Echipa({ profileId = '' }) {
   }, [shared, profileId])
 
   useEffect(() => {
-    if (!profile?.has_avatar || (!shared && !token)) {
+    if (!profile?.has_avatar || (!shared && !signedIn)) {
       setAvatarUrl('')
       return undefined
     }
     let cancelled = false
     let objectUrl = ''
     const avatarPath = shared ? `/api/profiles/${profileId}/avatar` : '/api/me/profile/avatar'
-    fetch(avatarPath, { headers: authHeaders(token) })
+    fetch(avatarPath, { credentials: 'include' })
       .then((response) => {
         if (!response.ok) throw new Error('Poza nu poate fi încărcată.')
         return response.blob()
@@ -259,7 +434,7 @@ export default function Echipa({ profileId = '' }) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [token, profile, shared, profileId])
+  }, [signedIn, profile, shared, profileId])
 
   useEffect(() => () => tweenRef.current?.kill(), [])
 
@@ -382,12 +557,13 @@ export default function Echipa({ profileId = '' }) {
   }
 
   const toggleVisibility = () => {
-    if (!token || !profile || visibilitySaving) return
+    if (!signedIn || !profile || visibilitySaving) return
     setVisibilitySaving(true)
     setError('')
     fetch('/api/me/profile/visibility', {
       method: 'PATCH',
-      headers: { ...authHeaders(token), 'content-type': 'application/json' },
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ public: !profile.public }),
     })
       .then(readJson)
@@ -404,10 +580,13 @@ export default function Echipa({ profileId = '' }) {
     if (file) body.append('avatar', file)
     setSaving(true)
     setError('')
-    fetch('/api/me/profile', {
-      method: 'PUT',
-      headers: { authorization: `Bearer ${token}` },
-      body,
+    withTurnstile(profileCheck, (turnstile_token) => {
+      body.append('turnstile_token', turnstile_token)
+      return fetch('/api/me/profile', {
+        method: 'PUT',
+        credentials: 'include',
+        body,
+      })
     })
       .then(readJson)
       .then((data) => {
@@ -419,7 +598,7 @@ export default function Echipa({ profileId = '' }) {
       .finally(() => setSaving(false))
   }
 
-  if (!shared && !token) {
+  if (!shared && !signedIn) {
     return (
       <main className="page">
         <section className="board">
@@ -473,11 +652,8 @@ export default function Echipa({ profileId = '' }) {
                 <span className="team-avatar" aria-hidden="true" />
               )}
               <h1 className="team-name">{displayName}</h1>
-              {mine ? (
+              {mine && !archived ? (
                 <div className="team-actions">
-                  <button type="button" className="team-edit" onClick={toggleVisibility} disabled={visibilitySaving}>
-                    {profile?.public ? 'public' : 'privat'}
-                  </button>
                   <button type="button" className="team-edit" onClick={openEdit}>Editare Profil</button>
                 </div>
               ) : null}
@@ -485,7 +661,7 @@ export default function Echipa({ profileId = '' }) {
           )}
         </header>
         {showSkeleton || !error ? null : <p className="form-error">{error}</p>}
-        {!showSkeleton && editing ? (
+        {!showSkeleton && editing && !archived ? (
           <form className="form team-form" onSubmit={save}>
             <label className="field">
               <span>numele echipei</span>
@@ -507,9 +683,17 @@ export default function Echipa({ profileId = '' }) {
                 placeholder="https://platforma.ivascu.xyz/e/..."
               />
             </label>
-            <button type="submit" className="team-edit" disabled={saving}>
-              {saving ? 'se salvează…' : 'salvează'}
-            </button>
+            <div className="turnstile-group">
+              <div ref={profileCheck.containerRef} className="turnstile" />
+            </div>
+            <div className="team-form-actions">
+              <button type="button" className="team-edit" onClick={toggleVisibility} disabled={visibilitySaving}>
+                {profile?.public ? 'public' : 'privat'}
+              </button>
+              <button type="submit" className="team-edit" disabled={saving}>
+                {saving ? 'se salvează…' : 'salvează'}
+              </button>
+            </div>
           </form>
         ) : null}
         {profile?.embed_url ? (
@@ -520,6 +704,7 @@ export default function Echipa({ profileId = '' }) {
           <div className="team-frame" />
         )}
         {profile?.account ? <AccountDossier account={profile.account} /> : null}
+        {owns ? <WorkFolder /> : null}
       </div>
       {profile?.embed_url
         ? createPortal(
@@ -529,6 +714,7 @@ export default function Echipa({ profileId = '' }) {
                 className={frameReady ? 'team-frame' : 'team-frame is-pending'}
                 src={profile.embed_url}
                 title="Platforma"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
                 allow="encrypted-media"
                 aria-hidden={frameReady ? undefined : true}
                 onLoad={markFrameReady}

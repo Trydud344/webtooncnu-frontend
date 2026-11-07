@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { readToken } from '../session.js'
+import { useTurnstile, withTurnstile } from '../turnstile.js'
 
 const MEMBERS = 'membrii (2–6)'
 const COORDINATORS = 'coordonatorii (1–2)'
@@ -75,12 +75,12 @@ function readable(err) {
   return (err && err.message) || 'Cererea nu a putut fi trimisă.'
 }
 
-async function api(path, { method = 'GET', token, body } = {}) {
+async function api(path, { method = 'GET', body } = {}) {
   const headers = {}
   if (body !== undefined) headers['content-type'] = 'application/json'
-  if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(path, {
     method,
+    credentials: 'include',
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -106,6 +106,8 @@ export default function RepairPanel({ onClose, onSaved }) {
   const [draft, setDraft] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const registrationCheck = useTurnstile('registration')
+  const peopleCheck = useTurnstile('people')
 
   useEffect(() => {
     const onKey = (event) => {
@@ -117,8 +119,7 @@ export default function RepairPanel({ onClose, onSaved }) {
 
   useEffect(() => {
     let cancelled = false
-    const token = readToken()
-    api('/api/me/registration', { token })
+    api('/api/me/registration')
       .then(async (data) => {
         if (cancelled) return
         setRegistration(data)
@@ -150,7 +151,6 @@ export default function RepairPanel({ onClose, onSaved }) {
     if (!registration || !draft || busy) return
     setError('')
     setBusy(true)
-    const token = readToken()
     let latest = registration
     try {
       const fields = {}
@@ -163,7 +163,10 @@ export default function RepairPanel({ onClose, onSaved }) {
       if (missing.has('consimțământul GDPR')) fields.gdpr_consent = true
       if (missing.has('adeverința de parteneriat')) fields.partnership_ack = true
       if (Object.keys(fields).length) {
-        latest = await api('/api/me/registration', { method: 'PUT', token, body: fields })
+        latest = await withTurnstile(registrationCheck, (turnstile_token) => api('/api/me/registration', {
+          method: 'PUT',
+          body: { ...fields, turnstile_token },
+        }))
       }
       if (missing.has(MEMBERS) || missing.has(COORDINATORS)) {
         const members = draft.editMembers
@@ -172,11 +175,10 @@ export default function RepairPanel({ onClose, onSaved }) {
         const coordinators = draft.editCoordinators
           ? draft.editCoordinators
           : [...(registration.coordinators || []).map(publicCoordinator), ...draft.newCoordinators]
-        latest = await api('/api/me/registration/people', {
+        latest = await withTurnstile(peopleCheck, (turnstile_token) => api('/api/me/registration/people', {
           method: 'PUT',
-          token,
-          body: { members, coordinators },
-        })
+          body: { members, coordinators, turnstile_token },
+        }))
       }
       setRegistration(latest)
       setDraft(seed(latest))
@@ -372,6 +374,10 @@ export default function RepairPanel({ onClose, onSaved }) {
           </label>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
+        <div className="turnstile-group">
+          <div ref={registrationCheck.containerRef} className="turnstile" />
+          <div ref={peopleCheck.containerRef} className="turnstile" />
+        </div>
         <button type="submit" className="repair-save" disabled={busy || !draft}>
           {busy ? 'se salvează…' : 'salvează'}
         </button>

@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-
-const TOKEN_KEY = 'webtooncnu_admin_token'
+import { useTurnstile, withTurnstile } from '../turnstile.js'
 
 function profileHref(id) {
-  const segs = window.location.pathname.split('/').filter(Boolean)
-  const at = segs.indexOf('admin')
-  const prefix = at === -1 ? [] : segs.slice(0, at)
-  return '/' + [...prefix, 'echipa', id].join('/')
+  return `/echipa/${id}`
 }
 
 const NEXT = {
@@ -37,6 +33,64 @@ const PREV_LABEL = {
   inchisa: 'anulează arhivarea',
 }
 
+const STATUSES = ['draft', 'deschisa', 'jurizare', 'inchisa', 'arhiva']
+
+const STATUS_LABEL = {
+  draft: 'în pregătire',
+  deschisa: 'deschisă',
+  jurizare: 'în jurizare',
+  inchisa: 'închisă',
+  arhiva: 'arhivă',
+}
+
+const INVITE_LABEL = {
+  active: 'activ',
+  used: 'folosit',
+  revoked: 'revocat',
+  expired: 'expirat',
+  invalidated: 'invalidat',
+}
+
+const CONTENT_LABEL = {
+  draft: 'ciornă',
+  trimis: 'trimis',
+}
+
+const SECTIONS = [
+  { id: 'editie', label: 'ediție' },
+  { id: 'echipe', label: 'echipe' },
+  { id: 'juriu', label: 'juriu' },
+  { id: 'anunturi', label: 'anunțuri' },
+  { id: 'albume', label: 'albume' },
+  { id: 'resurse', label: 'resurse' },
+  { id: 'jurnal', label: 'jurnal' },
+]
+
+function readSection() {
+  const id = window.location.hash.replace(/^#/, '')
+  return SECTIONS.some((item) => item.id === id) ? id : 'editie'
+}
+
+function formatWhen(iso) {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('ro-RO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Bucharest',
+  }).format(date)
+}
+
+function editionLine(edition) {
+  if (!edition) return 'Nu există o ediție curentă.'
+  const bits = [edition.year_label, STATUS_LABEL[edition.status] || edition.status]
+  if (edition.status === 'deschisa' && new Date(edition.registration_deadline) < new Date()) {
+    bits.push('termenul de înscriere a trecut')
+  }
+  return bits.join(' · ')
+}
+
 function toLocalInput(iso) {
   if (!iso) return ''
   const date = new Date(iso)
@@ -51,12 +105,13 @@ function toIso(value) {
   return date.toISOString()
 }
 
-async function api(path, { method = 'GET', body, token } = {}) {
+async function api(path, { method = 'GET', body } = {}) {
   const response = await fetch(path, {
     method,
+    credentials: 'include',
     headers: {
+      'x-session': 'admin',
       ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
@@ -71,10 +126,12 @@ async function api(path, { method = 'GET', body, token } = {}) {
 }
 
 export default function Admin() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || '')
+  const [token, setToken] = useState(false)
+  const [checked, setChecked] = useState(false)
   const [ready, setReady] = useState(false)
   const [email, setEmail] = useState('presedinte@cnutoons.com')
   const [password, setPassword] = useState('')
+  const loginCheck = useTurnstile('login')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [edition, setEdition] = useState(null)
@@ -91,9 +148,13 @@ export default function Admin() {
   const [albums, setAlbums] = useState([])
   const [albumTitle, setAlbumTitle] = useState('')
   const [albumHref, setAlbumHref] = useState('')
+  const [slides, setSlides] = useState([])
+  const [slideTitle, setSlideTitle] = useState('')
+  const [slideHref, setSlideHref] = useState('')
   const [bulletins, setBulletins] = useState([])
   const [bulletinTitle, setBulletinTitle] = useState('')
   const [bulletinBody, setBulletinBody] = useState('')
+  const [section, setSection] = useState(readSection)
   const [newEdition, setNewEdition] = useState({
     year_label: '',
     theme: '',
@@ -108,11 +169,12 @@ export default function Admin() {
       if (err.status === 404) return null
       throw err
     })
-    const [editionData, editionList, albumList, bulletinList, inviteData, juryData, teamData, alertData, auditData] = await Promise.all([
+    const [editionData, editionList, albumList, bulletinList, slideList, inviteData, juryData, teamData, alertData, auditData] = await Promise.all([
       editionRequest,
       api('/api/admin/editions', { token: activeToken }),
       api('/api/admin/albums', { token: activeToken }),
       api('/api/admin/bulletins', { token: activeToken }),
+      api('/api/admin/slides', { token: activeToken }),
       api('/api/admin/invite-codes', { token: activeToken }),
       api('/api/admin/jury', { token: activeToken }),
       api('/api/admin/teams', { token: activeToken }),
@@ -135,25 +197,39 @@ export default function Admin() {
     setEditions(editionList.editions)
     setAlbums(albumList.albums)
     setBulletins(bulletinList.bulletins)
+    setSlides(slideList.slides)
   }, [])
 
   useEffect(() => {
-    if (!token) {
-      setReady(false)
-      return
-    }
     let cancelled = false
-    api('/api/auth/me', { token })
+    if (!token) {
+      if (checked) return undefined
+      api('/api/auth/me')
+        .then((data) => {
+          if (cancelled) return
+          if (data.account.role === 'admin') setToken(true)
+          else setChecked(true)
+        })
+        .catch((err) => {
+          if (cancelled) return
+          if (err.status !== 401 && err.status !== 403) setError(err.message)
+          setChecked(true)
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+    api('/api/auth/me')
       .then(async (data) => {
         if (cancelled) return
         if (data.account.role !== 'admin') {
-          sessionStorage.removeItem(TOKEN_KEY)
-          setToken('')
+          setToken(false)
+          setChecked(true)
           setError('Contul nu este de președinte.')
           return
         }
         try {
-          await load(token)
+          await load()
         } catch (err) {
           if (!cancelled) setError(err.message)
         }
@@ -161,8 +237,8 @@ export default function Admin() {
       .catch((err) => {
         if (cancelled) return
         if (err.status === 401 || err.status === 403) {
-          sessionStorage.removeItem(TOKEN_KEY)
-          setToken('')
+          setToken(false)
+          setChecked(true)
         }
         setError(err.message)
       })
@@ -172,7 +248,7 @@ export default function Admin() {
     return () => {
       cancelled = true
     }
-  }, [token, load])
+  }, [token, checked, load])
 
   const run = async (action) => {
     setError('')
@@ -181,36 +257,83 @@ export default function Admin() {
       await action()
     } catch (err) {
       setError(err.message)
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
     }
   }
 
   const login = (event) => {
     event.preventDefault()
     run(async () => {
-      const data = await api('/api/auth/login', { method: 'POST', body: { email, password } })
-      if (data.account.role !== 'admin') throw new Error('Contul nu este de președinte.')
-      sessionStorage.setItem(TOKEN_KEY, data.token)
-      setToken(data.token)
+      const data = await withTurnstile(loginCheck, (turnstile_token) => api('/api/auth/login', {
+        method: 'POST',
+        body: { email, password, turnstile_token },
+      }))
+      if (data.account.role !== 'admin') {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'x-session': 'team' },
+        }).catch(() => {})
+        throw new Error('Contul nu este de președinte.')
+      }
+      setToken(true)
     })
   }
 
   const logout = () => {
-    const current = token
-    sessionStorage.removeItem(TOKEN_KEY)
-    setToken('')
+    setToken(false)
+    setChecked(true)
     setEdition(null)
-    api('/api/auth/logout', { method: 'POST', token: current }).catch(() => {})
+    api('/api/auth/logout', { method: 'POST' }).catch(() => {})
   }
 
+  useEffect(() => {
+    const sync = () => {
+      setSection(readSection())
+      setNotice('')
+      setError('')
+    }
+    window.addEventListener('popstate', sync)
+    return () => window.removeEventListener('popstate', sync)
+  }, [])
+
+  const openSection = (id) => {
+    if (id === section) return
+    const nextHash = `#${id}`
+    window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`)
+    setSection(id)
+    setNotice('')
+    setError('')
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+  }
+
+  const onTabKey = (event, index) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return
+    event.preventDefault()
+    const last = SECTIONS.length - 1
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? last
+        : event.key === 'ArrowRight'
+          ? (index + 1) % SECTIONS.length
+          : (index - 1 + SECTIONS.length) % SECTIONS.length
+    openSection(SECTIONS[nextIndex].id)
+    document.getElementById(`admin-tab-${SECTIONS[nextIndex].id}`)?.focus()
+  }
+
+  if (!token && !checked) return null
   if (!token) {
     return (
-      <main className="page">
+      <main className="page admin-page">
         <header className="hero">
           <h1>admin</h1>
           <p className="lede">Contul de președinte.</p>
         </header>
         <form className="form" onSubmit={login}>
-          {error ? <p className="form-error">{error}</p> : null}
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <label className="field">
             <span>email</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
@@ -219,6 +342,9 @@ export default function Admin() {
             <span>parolă</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           </label>
+          <div className="turnstile-group">
+            <div ref={loginCheck.containerRef} className="turnstile" />
+          </div>
           <button type="submit" className="text-btn">intră</button>
         </form>
       </main>
@@ -227,7 +353,7 @@ export default function Admin() {
 
   if (!ready) {
     return (
-      <main className="page">
+      <main className="page admin-page">
         <header className="hero">
           <h1>admin</h1>
           <p className="lede">Se încarcă contul…</p>
@@ -236,25 +362,43 @@ export default function Admin() {
     )
   }
 
-  const registrationsOpen = edition?.status === 'deschisa' && new Date(edition.registration_deadline) >= new Date()
   const next = edition ? NEXT[edition.status] : null
 
   return (
-    <main className="page">
+    <main className="page admin-page">
       <header className="hero">
         <h1>admin</h1>
-        <p className="lede">
-          {edition
-            ? `${edition.year_label} · ${edition.status}${registrationsOpen ? ' · înscrierile sunt deschise' : ' · înscrierile sunt închise'}`
-            : 'Nu există o ediție curentă. Poți adăuga una mai jos.'}
-        </p>
-        <button type="button" className="text-btn" onClick={logout}>ieși</button>
+        <div className="admin-head">
+          <p className="lede">{editionLine(edition)}</p>
+          <button type="button" className="text-btn" onClick={logout}>ieși</button>
+        </div>
+        <nav className="admin-nav" role="tablist" aria-label="secțiuni">
+          {SECTIONS.map((item, index) => (
+            <button
+              key={item.id}
+              id={`admin-tab-${item.id}`}
+              type="button"
+              role="tab"
+              className="text-btn"
+              aria-selected={section === item.id}
+              aria-controls="admin-panel"
+              tabIndex={section === item.id ? 0 : -1}
+              onClick={() => openSection(item.id)}
+              onKeyDown={(event) => onTabKey(event, index)}
+            >
+              {item.label}
+              {item.id === 'jurnal' && alerts.length > 0 ? <span className="admin-count">{alerts.length}</span> : null}
+            </button>
+          ))}
+        </nav>
       </header>
-      {error ? <p className="form-error">{error}</p> : null}
-      {notice ? <p>{notice}</p> : null}
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
+      <div id="admin-panel" role="tabpanel" aria-labelledby={`admin-tab-${section}`}>
 
+      {section === 'anunturi' ? (
       <section>
-        <h2>anunțuri platformă</h2>
+        <h2>anunțuri</h2>
         <p className="admin-note">
           Mesajele apar pe pagina platformei, la /platforma, în ordinea publicării, cele mai noi primele.
         </p>
@@ -285,15 +429,16 @@ export default function Admin() {
           </label>
           <button type="submit" className="text-btn">publică anunțul</button>
         </form>
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>titlu</th><th>publicat</th><th></th></tr>
+            <tr><th scope="col">titlu</th><th scope="col">publicat</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {bulletins.map((item) => (
               <tr key={item.id}>
                 <td>{item.title}</td>
-                <td>{item.created_at ? new Date(item.created_at).toLocaleString('ro-RO') : ''}</td>
+                <td>{formatWhen(item.created_at)}</td>
                 <td>
                   <button
                     type="button"
@@ -312,10 +457,13 @@ export default function Admin() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
+      ) : null}
 
+      {section === 'albume' ? (
       <section>
-        <h2>albume evenimente</h2>
+        <h2>albume</h2>
         <p className="admin-note">
           Link public de Google Photos. Albumul apare pe pagina de evenimente, împreună cu cele deja existente.
         </p>
@@ -346,9 +494,10 @@ export default function Admin() {
           </label>
           <button type="submit" className="text-btn">adaugă albumul</button>
         </form>
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>titlu</th><th>fotografii</th><th></th></tr>
+            <tr><th scope="col">titlu</th><th scope="col">fotografii</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {albums.map((item) => (
@@ -373,49 +522,123 @@ export default function Admin() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
+      ) : null}
 
+      {section === 'resurse' ? (
+      <section>
+        <h2>resurse</h2>
+        <p className="admin-note">
+          Link de Google Slides sau fișier public Google Drive. Prezentarea apare pe /resurse, după materialele deja publicate.
+        </p>
+        <form
+          className="form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            run(async () => {
+              await api('/api/admin/slides', {
+                method: 'POST',
+                token,
+                body: { title: slideTitle, href: slideHref },
+              })
+              setSlideTitle('')
+              setSlideHref('')
+              setNotice('Prezentarea a fost adăugată.')
+              await load(token)
+            })
+          }}
+        >
+          <label className="field">
+            <span>titlu</span>
+            <input value={slideTitle} onChange={(e) => setSlideTitle(e.target.value)} placeholder="Cum desenezi un cadru" />
+          </label>
+          <label className="field">
+            <span>link</span>
+            <input value={slideHref} onChange={(e) => setSlideHref(e.target.value)} placeholder="https://docs.google.com/presentation/d/..." />
+          </label>
+          <button type="submit" className="text-btn">adaugă prezentarea</button>
+        </form>
+        <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr><th scope="col">titlu</th><th scope="col">adăugată</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
+          </thead>
+          <tbody>
+            {slides.map((item) => (
+              <tr key={item.id}>
+                <td>{item.title}</td>
+                <td>{formatWhen(item.created_at)}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="text-btn"
+                    onClick={() => run(async () => {
+                      if (!window.confirm(`Ștergi prezentarea ${item.title}?`)) return
+                      await api(`/api/admin/slides/${item.id}`, { method: 'DELETE', token })
+                      setNotice('Prezentarea a fost ștearsă.')
+                      await load(token)
+                    })}
+                  >
+                    șterge
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
+      </section>
+      ) : null}
+
+      {section === 'editie' ? <>
       {edition && draft ? <>
       <section>
         <h2>ediția curentă</h2>
-        <p className="admin-note">
-          Înscrierile merg doar când statutul este <code>deschisa</code> și termenul de înscriere nu a trecut.
-          Pașii sunt draft → deschisa → jurizare → inchisa → arhiva și pot fi făcuți și înapoi, câte unul.
-        </p>
-        {PREV[edition.status] ? (
-          <button
-            type="button"
-            className="text-btn"
-            onClick={() => run(async () => {
-              const data = await api('/api/admin/edition/transition', {
-                method: 'POST',
-                token,
-                body: { status: PREV[edition.status], edition_id: edition.id },
-              })
-              setNotice(`Statut: ${data.status}`)
-              await load(token)
-            })}
-          >
-            {PREV_LABEL[PREV[edition.status]]}
-          </button>
-        ) : null}
-        {next ? (
-          <button
-            type="button"
-            className="text-btn"
-            onClick={() => run(async () => {
-              const data = await api('/api/admin/edition/transition', {
-                method: 'POST',
-                token,
-                body: { status: next },
-              })
-              setNotice(`Statut: ${data.status}`)
-              await load(token)
-            })}
-          >
-            {NEXT_LABEL[next]}
-          </button>
-        ) : <p>Ediția este arhivată.</p>}
+        <ol className="admin-steps">
+          {STATUSES.map((status) => (
+            <li key={status} aria-current={edition.status === status ? 'step' : undefined}>
+              {STATUS_LABEL[status]}
+            </li>
+          ))}
+        </ol>
+        <p className="admin-note">Înscrierile merg doar când ediția este deschisă și termenul nu a trecut. Câte un pas înainte sau înapoi.</p>
+        <div className="admin-actions">
+          {PREV[edition.status] ? (
+            <button
+              type="button"
+              className="text-btn"
+              onClick={() => run(async () => {
+                const data = await api('/api/admin/edition/transition', {
+                  method: 'POST',
+                  token,
+                  body: { status: PREV[edition.status], edition_id: edition.id },
+                })
+                setNotice(`Statut: ${STATUS_LABEL[data.status] || data.status}`)
+                await load(token)
+              })}
+            >
+              {PREV_LABEL[PREV[edition.status]]}
+            </button>
+          ) : null}
+          {next ? (
+            <button
+              type="button"
+              className="text-btn"
+              onClick={() => run(async () => {
+                const data = await api('/api/admin/edition/transition', {
+                  method: 'POST',
+                  token,
+                  body: { status: next },
+                })
+                setNotice(`Statut: ${STATUS_LABEL[data.status] || data.status}`)
+                await load(token)
+              })}
+            >
+              {NEXT_LABEL[next]}
+            </button>
+          ) : null}
+        </div>
         <form
           className="form"
           onSubmit={(event) => {
@@ -458,42 +681,66 @@ export default function Admin() {
 
       <section>
         <h2>categorii</h2>
-        <p className="admin-note">Secțiune și subsecțiune: litere mici, cifre, underscore. Se pot schimba doar în draft sau deschisa.</p>
-        {categories.map((item, index) => (
-          <div className="admin-row" key={item.id || index}>
-            <input
-              value={item.section}
-              onChange={(e) => {
-                const nextRows = [...categories]
-                nextRows[index] = { ...item, section: e.target.value }
-                setCategories(nextRows)
-              }}
-              placeholder="sectiune"
-            />
-            <input
-              value={item.subsection}
-              onChange={(e) => {
-                const nextRows = [...categories]
-                nextRows[index] = { ...item, subsection: e.target.value }
-                setCategories(nextRows)
-              }}
-              placeholder="subsectiune"
-            />
-            <label>
-              <input
-                type="checkbox"
-                checked={item.active}
-                onChange={(e) => {
-                  const nextRows = [...categories]
-                  nextRows[index] = { ...item, active: e.target.checked }
-                  setCategories(nextRows)
-                }}
-              />{' '}
-              activă
-            </label>
-            <button type="button" className="text-btn" onClick={() => setCategories(categories.filter((_, i) => i !== index))}>șterge</button>
-          </div>
-        ))}
+        <p className="admin-note">Litere mici, cifre, underscore. Se pot schimba doar în pregătire sau deschisă.</p>
+        <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">secțiune</th>
+              <th scope="col">subsecțiune</th>
+              <th scope="col">activă</th>
+              <th scope="col"><span className="admin-sr">acțiuni</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((item, index) => (
+              <tr key={item.id || index}>
+                <td>
+                  <input
+                    className="admin-input"
+                    aria-label={`secțiune ${index + 1}`}
+                    value={item.section}
+                    onChange={(e) => {
+                      const nextRows = [...categories]
+                      nextRows[index] = { ...item, section: e.target.value }
+                      setCategories(nextRows)
+                    }}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="admin-input"
+                    aria-label={`subsecțiune ${index + 1}`}
+                    value={item.subsection}
+                    onChange={(e) => {
+                      const nextRows = [...categories]
+                      nextRows[index] = { ...item, subsection: e.target.value }
+                      setCategories(nextRows)
+                    }}
+                  />
+                </td>
+                <td>
+                  <label className="admin-check">
+                    <input
+                      type="checkbox"
+                      checked={item.active}
+                      aria-label={`categoria ${index + 1} activă`}
+                      onChange={(e) => {
+                        const nextRows = [...categories]
+                        nextRows[index] = { ...item, active: e.target.checked }
+                        setCategories(nextRows)
+                      }}
+                    />
+                  </label>
+                </td>
+                <td>
+                  <button type="button" className="text-btn" onClick={() => setCategories(categories.filter((_, i) => i !== index))}>șterge</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
         <div className="actions">
           <button type="button" className="text-btn" onClick={() => setCategories([...categories, { section: '', subsection: '', active: true }])}>adaugă</button>
           <button
@@ -522,18 +769,20 @@ export default function Admin() {
       </> : null}
 
       <section>
-        <h2>ediții salvate</h2>
+        <h2>ediții</h2>
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>an</th><th>temă</th><th>statut</th><th></th></tr>
+            <tr><th scope="col">an</th><th scope="col">temă</th><th scope="col">statut</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {editions.map((item) => (
               <tr key={item.id}>
                 <td>{item.year_label}</td>
                 <td>{item.theme}</td>
-                <td>{item.status}</td>
+                <td>{STATUS_LABEL[item.status] || item.status}</td>
                 <td>
+                  <div className="admin-actions">
                   {PREV[item.status] ? (
                     <button
                       type="button"
@@ -544,7 +793,7 @@ export default function Admin() {
                           token,
                           body: { status: PREV[item.status], edition_id: item.id },
                         })
-                        setNotice(`Statut: ${PREV[item.status]}`)
+                        setNotice(`Statut: ${STATUS_LABEL[PREV[item.status]] || PREV[item.status]}`)
                         await load(token)
                       })}
                     >
@@ -563,11 +812,15 @@ export default function Admin() {
                   >
                     șterge
                   </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
+      </section>
+      <section>
         <h2>ediție nouă</h2>
         <p className="admin-note">
           O ediție trecută se salvează direct și apare pe pagina de ediții.
@@ -615,20 +868,22 @@ export default function Admin() {
             <span>termen jurizare</span>
             <input type="datetime-local" value={newEdition.judging_deadline} onChange={(e) => setNewEdition({ ...newEdition, judging_deadline: e.target.value })} />
           </label>
-          <label>
+          <label className="admin-check">
             <input
               type="checkbox"
               checked={newEdition.archived}
               onChange={(e) => setNewEdition({ ...newEdition, archived: e.target.checked })}
-            />{' '}
+            />
             ediție trecută
           </label>
           <button type="submit" className="text-btn">salvează ediția</button>
         </form>
       </section>
+      </> : null}
 
+      {section === 'juriu' ? <>
       <section>
-        <h2>coduri juriu</h2>
+        <h2>coduri</h2>
         <form
           className="form"
           onSubmit={(event) => {
@@ -652,17 +907,18 @@ export default function Admin() {
           <button type="submit" className="text-btn">generează</button>
         </form>
         {freshCodes.length ? (
-          <pre>{freshCodes.map((item) => item.code).join('\n')}</pre>
+          <pre className="admin-codes">{freshCodes.map((item) => item.code).join('\n')}</pre>
         ) : null}
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>cod</th><th>statut</th><th>folosit de</th><th></th></tr>
+            <tr><th scope="col">cod</th><th scope="col">statut</th><th scope="col">folosit de</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {invites.map((item) => (
               <tr key={item.id}>
                 <td>{item.masked}</td>
-                <td>{item.status}</td>
+                <td>{INVITE_LABEL[item.status] || item.status}</td>
                 <td>{item.used_by_email || ''}</td>
                 <td>
                   {item.status === 'active' || item.status === 'expired' ? (
@@ -682,13 +938,15 @@ export default function Admin() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       <section>
-        <h2>juriu</h2>
+        <h2>membri</h2>
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>nume</th><th>email</th><th>activ</th><th></th></tr>
+            <tr><th scope="col">nume</th><th scope="col">email</th><th scope="col">activ</th><th scope="col">arhivă</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {jury.map((item) => (
@@ -696,6 +954,7 @@ export default function Admin() {
                 <td>{item.full_name}</td>
                 <td>{item.email}</td>
                 <td>{item.is_active ? 'da' : 'nu'}</td>
+                <td>{item.archived ? 'da' : 'nu'}</td>
                 <td>
                   {item.is_active ? (
                     <button
@@ -714,23 +973,29 @@ export default function Admin() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
+      </> : null}
 
+      {section === 'echipe' ? (
       <section>
         <h2>echipe</h2>
+        <div className="admin-scroll">
         <table className="admin-table">
           <thead>
-            <tr><th>nr</th><th>titlu</th><th>școală</th><th>email</th><th>statut</th><th></th></tr>
+            <tr><th scope="col">nr</th><th scope="col">ediție</th><th scope="col">titlu</th><th scope="col">școală</th><th scope="col">email</th><th scope="col">statut</th><th scope="col"><span className="admin-sr">acțiuni</span></th></tr>
           </thead>
           <tbody>
             {teams.map((item) => (
               <tr key={item.registration_id}>
                 <td>{item.nr_crt}</td>
+                <td>{item.year_label}</td>
                 <td>{item.title}</td>
                 <td>{item.school}</td>
                 <td>{item.account_email}</td>
-                <td>{item.content_status}</td>
+                <td>{CONTENT_LABEL[item.content_status] || item.content_status}</td>
                 <td>
+                  <div className="admin-actions">
                   <a className="text-btn" href={profileHref(item.registration_id)}>profil</a>
                   <button
                     type="button"
@@ -755,7 +1020,8 @@ export default function Admin() {
                     className="text-btn"
                     onClick={() => run(async () => {
                       const response = await fetch(`/api/admin/teams/${item.registration_id}/anexa1`, {
-                        headers: { authorization: `Bearer ${token}` },
+                        credentials: 'include',
+                        headers: { 'x-session': 'admin' },
                       })
                       if (!response.ok) {
                         const data = await response.json().catch(() => null)
@@ -772,30 +1038,82 @@ export default function Admin() {
                   >
                     anexa
                   </button>
+                  {item.chosen_version_id ? (
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={() => run(async () => {
+                        const response = await fetch(`/api/admin/submissions/${item.chosen_version_id}/file`, {
+                          credentials: 'include',
+                          headers: { 'x-session': 'admin' },
+                        })
+                        if (!response.ok) {
+                          const data = await response.json().catch(() => null)
+                          throw new Error(data?.detail || 'PDF-ul nu a putut fi descărcat.')
+                        }
+                        const blob = await response.blob()
+                        const url = URL.createObjectURL(blob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.download = 'lucrare.pdf'
+                        link.click()
+                        URL.revokeObjectURL(url)
+                      })}
+                    >
+                      pdf
+                    </button>
+                  ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </section>
+      ) : null}
 
+      {section === 'jurnal' ? <>
       <section>
         <h2>alerte</h2>
-        <ul>
-          {alerts.map((item) => (
-            <li key={item.id}>{item.created_at} — {item.message}</li>
-          ))}
-        </ul>
+        <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr><th scope="col">când</th><th scope="col">mesaj</th></tr>
+          </thead>
+          <tbody>
+            {alerts.map((item) => (
+              <tr key={item.id}>
+                <td>{formatWhen(item.created_at)}</td>
+                <td>{item.message}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
       </section>
 
       <section>
         <h2>audit</h2>
-        <ul>
-          {events.map((item) => (
-            <li key={item.id}>{item.created_at} — {item.action}{item.reason ? ` (${item.reason})` : ''}</li>
-          ))}
-        </ul>
+        <div className="admin-scroll">
+        <table className="admin-table">
+          <thead>
+            <tr><th scope="col">când</th><th scope="col">acțiune</th><th scope="col">motiv</th></tr>
+          </thead>
+          <tbody>
+            {events.map((item) => (
+              <tr key={item.id}>
+                <td>{formatWhen(item.created_at)}</td>
+                <td>{item.action}</td>
+                <td>{item.reason || ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </div>
       </section>
+      </> : null}
+      </div>
     </main>
   )
 }

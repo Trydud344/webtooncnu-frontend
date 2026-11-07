@@ -1,34 +1,33 @@
-export const TOKEN_KEY = 'wtc_token'
-
 const AUTH_EVENT = 'wtc-auth'
 export const PROFILE_EVENT = 'wtc-profile'
+const FLAG = 'wtc_signed_in'
+const LEGACY_TOKEN = 'wtc_token'
+const LEGACY_ADMIN = 'webtooncnu_admin_token'
 
-// localStorage, not sessionStorage: the same sign-in has to reach every
-// open tab, including /acasa and /evenimente, which are often already open.
-function storedToken() {
-  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || ''
+function purgeLegacy() {
+  localStorage.removeItem(LEGACY_TOKEN)
+  sessionStorage.removeItem(LEGACY_TOKEN)
+  sessionStorage.removeItem(LEGACY_ADMIN)
 }
 
-const legacyToken = sessionStorage.getItem(TOKEN_KEY)
-if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
-  localStorage.setItem(TOKEN_KEY, legacyToken)
-}
-if (legacyToken) sessionStorage.removeItem(TOKEN_KEY)
+purgeLegacy()
 
-export function readToken() {
-  return storedToken()
+export function readSignedIn() {
+  return localStorage.getItem(FLAG) === '1'
 }
 
-export function writeToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token)
-  else localStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(TOKEN_KEY)
+export function writeSignedIn(on) {
+  purgeLegacy()
+  const current = localStorage.getItem(FLAG) === '1'
+  if (current === Boolean(on)) return
+  if (on) localStorage.setItem(FLAG, '1')
+  else localStorage.removeItem(FLAG)
   window.dispatchEvent(new Event(AUTH_EVENT))
 }
 
 export function subscribeAuth(onChange) {
   const onStorage = (event) => {
-    if (event.key === TOKEN_KEY) onChange()
+    if (event.key === FLAG) onChange()
   }
   window.addEventListener(AUTH_EVENT, onChange)
   window.addEventListener('storage', onStorage)

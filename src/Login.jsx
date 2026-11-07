@@ -1,32 +1,36 @@
 import { useState } from 'react'
-import { writeToken } from './session.js'
+import { writeSignedIn } from './session.js'
+import { useTurnstile, withTurnstile } from './turnstile.js'
 
 export default function Login({ onBack, onSignup, onEnter }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const loginCheck = useTurnstile('login')
 
   const submit = async (event) => {
     event.preventDefault()
     setError('')
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await withTurnstile(loginCheck, (turnstile_token) => fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
+        body: JSON.stringify({ email, password, turnstile_token }),
+      }))
       const text = await response.text()
       const data = text ? JSON.parse(text) : null
       if (!response.ok) throw new Error(data?.detail || 'Autentificarea a eșuat.')
       if (data.account?.role !== 'team' && data.account?.role !== 'jury') {
         await fetch('/api/auth/logout', {
           method: 'POST',
-          headers: { authorization: `Bearer ${data.token}` },
+          credentials: 'include',
+          headers: { 'x-session': 'admin' },
         }).catch(() => {})
         setError('Contul nu este de echipă.')
         return
       }
-      writeToken(data.token)
+      writeSignedIn(true)
       onEnter(data.account)
     } catch (err) {
       setError(err.message === 'Failed to fetch' ? 'API-ul nu răspunde.' : err.message)
@@ -69,6 +73,9 @@ export default function Login({ onBack, onSignup, onEnter }) {
             />
           </label>
           {error ? <p className="form-error">{error}</p> : null}
+          <div className="turnstile-group">
+            <div ref={loginCheck.containerRef} className="turnstile" />
+          </div>
           <div className="actions">
             <button type="submit" className="text-btn">intră</button>
             <a

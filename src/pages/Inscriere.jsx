@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-import { readToken, writeToken } from '../session.js'
+import { readSignedIn, writeSignedIn } from '../session.js'
+import { useTurnstile, withTurnstile } from '../turnstile.js'
 
 const emptyMember = () => ({ full_name: '', unit_name: '', locality: '', school_class: '' })
 const emptyCoordinator = () => ({ full_name: '', email: '', phone: '' })
@@ -19,12 +20,12 @@ function readable(err) {
   return (err && err.message) || 'Cererea nu a putut fi trimisă.'
 }
 
-async function api(path, { method = 'GET', token, body } = {}) {
+async function api(path, { method = 'GET', body } = {}) {
   const headers = {}
   if (body !== undefined) headers['content-type'] = 'application/json'
-  if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(path, {
     method,
+    credentials: 'include',
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -59,6 +60,11 @@ export default function Inscriere({ onBack }) {
   const [busy, setBusy] = useState(false)
   const [members, setMembers] = useState([emptyMember(), emptyMember()])
   const [coordinators, setCoordinators] = useState([emptyCoordinator()])
+  const signupCheck = useTurnstile('signup')
+  const loginCheck = useTurnstile('login')
+  const registrationCheck = useTurnstile('registration')
+  const peopleCheck = useTurnstile('people')
+  const submitCheck = useTurnstile('registration-submit')
 
   useEffect(() => {
     let cancelled = false
@@ -110,16 +116,19 @@ export default function Inscriere({ onBack }) {
 
     setBusy(true)
     try {
-      let token = readToken()
-      if (!token) {
-        await api('/api/auth/signup', { method: 'POST', body: { email, password } })
-        const session = await api('/api/auth/login', { method: 'POST', body: { email, password } })
-        token = session.token
-        writeToken(token)
+      if (!readSignedIn()) {
+        await withTurnstile(signupCheck, (turnstile_token) => api('/api/auth/signup', {
+          method: 'POST',
+          body: { email, password, turnstile_token },
+        }))
+        await withTurnstile(loginCheck, (turnstile_token) => api('/api/auth/login', {
+          method: 'POST',
+          body: { email, password, turnstile_token },
+        }))
+        writeSignedIn(true)
       }
-      await api('/api/me/registration', {
+      await withTurnstile(registrationCheck, (turnstile_token) => api('/api/me/registration', {
         method: 'PUT',
-        token,
         body: {
           title: String(form.get('title') || ''),
           category_id: String(form.get('category_id') || ''),
@@ -129,14 +138,17 @@ export default function Inscriere({ onBack }) {
           unit_type: String(form.get('unit_type') || ''),
           gdpr_consent: true,
           partnership_ack: true,
+          turnstile_token,
         },
-      })
-      await api('/api/me/registration/people', {
+      }))
+      await withTurnstile(peopleCheck, (turnstile_token) => api('/api/me/registration/people', {
         method: 'PUT',
-        token,
-        body: { members: people, coordinators: teachers },
-      })
-      await api('/api/me/registration/submit', { method: 'POST', token })
+        body: { members: people, coordinators: teachers, turnstile_token },
+      }))
+      await withTurnstile(submitCheck, (turnstile_token) => api('/api/me/registration/submit', {
+        method: 'POST',
+        body: { turnstile_token },
+      }))
       setDone(true)
     } catch (err) {
       setError(readable(err))
@@ -352,6 +364,13 @@ export default function Inscriere({ onBack }) {
           </label>
 
           {error ? <p className="form-error">{error}</p> : null}
+          <div className="turnstile-group">
+            <div ref={signupCheck.containerRef} className="turnstile" />
+            <div ref={loginCheck.containerRef} className="turnstile" />
+            <div ref={registrationCheck.containerRef} className="turnstile" />
+            <div ref={peopleCheck.containerRef} className="turnstile" />
+            <div ref={submitCheck.containerRef} className="turnstile" />
+          </div>
           <div className="actions">
             <button type="submit" className="text-btn" disabled={busy || !edition}>
               {busy ? 'se trimite…' : 'creează contul'}

@@ -14,7 +14,7 @@ function formatWhen(iso) {
   })
 }
 
-export default function Platforma() {
+export default function Platforma({ onOpenResources, onOpenWork }) {
   const [posts, setPosts] = useState(null)
   const [error, setError] = useState('')
 
@@ -40,7 +40,7 @@ export default function Platforma() {
 
   return (
     <main className="page platform-page">
-      <ContestCalendar />
+      <ContestCalendar onOpenResources={onOpenResources} onOpenWork={onOpenWork} />
       <section className="board" aria-label="anunțuri">
         {error ? <p className="form-error">{error}</p> : null}
         {posts === null && !error ? <p>Se încarcă anunțurile…</p> : null}

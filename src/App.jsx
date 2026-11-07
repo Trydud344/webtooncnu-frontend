@@ -9,9 +9,10 @@ import Platforma from './pages/Platforma.jsx'
 import Echipa from './pages/Echipa.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import Editii from './pages/Editii.jsx'
+import Resurse from './pages/Resurse.jsx'
 import AccountButton from './AccountButton.jsx'
 import RepairPanel from './components/RepairPanel.jsx'
-import { notifyProfile, readToken, subscribeAuth, subscribeProfile } from './session.js'
+import { notifyProfile, readSignedIn, subscribeAuth, subscribeProfile, writeSignedIn } from './session.js'
 import { VIEWS, PLATFORM_ITEMS, parseRoute, canonicalFor, profilePath } from './router.js'
 
 const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'admin' && v !== 'platforma').map((v) => ({ label: v, href: `/${v}` }))
@@ -27,25 +28,26 @@ export default function App() {
   const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
   const [ownProfileId, setOwnProfileId] = useState('')
   const [missing, setMissing] = useState([])
+  const [archived, setArchived] = useState(false)
   const [repairing, setRepairing] = useState(false)
   const view = route.view
   const section = route.section
   const onOwnProfile = view === 'echipa' && Boolean(ownProfileId) && route.profileId === ownProfileId
   const platformItems = useMemo(() => PLATFORM_ITEMS.map((item) => (
     item.section === 'echipa' && ownProfileId
-      ? { ...item, href: profilePath(ownProfileId, window.location.pathname) }
+      ? { ...item, href: profilePath(ownProfileId) }
       : item
   )), [ownProfileId])
 
   const openProfile = (id) => {
-    const url = profilePath(id, window.location.pathname)
+    const url = profilePath(id)
     const next = parseRoute(url)
     setRoute(next)
     if (window.location.pathname !== next.canonical) window.history.pushState(null, '', next.canonical)
   }
 
   const navigate = (next, nextSection) => {
-    const url = canonicalFor(next, window.location.pathname, nextSection)
+    const url = canonicalFor(next, nextSection)
     setRoute(parseRoute(url))
     if (window.location.pathname !== url) window.history.pushState(null, '', url)
   }
@@ -56,20 +58,23 @@ export default function App() {
       navigate('acasa')
       return
     }
-    if (href === '/platforma/echipa' || href.endsWith('/platforma/echipa')) {
+    if (href === '/platforma/echipa') {
       if (ownProfileId) {
         openProfile(ownProfileId)
         return
       }
-      const token = readToken()
-      if (!token) {
+      if (!readSignedIn()) {
         navigate('login')
         return
       }
-      fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+      fetch('/api/me/profile', { credentials: 'include' })
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
-          if (!data?.id) return
+          if (!data?.id) {
+            writeSignedIn(false)
+            navigate('login')
+            return
+          }
           setOwnProfileId(data.id)
           openProfile(data.id)
         })
@@ -85,8 +90,8 @@ export default function App() {
     navigate(next.view, next.section)
   }
 
-  // La incarcare: normalizeaza URL-ul (/prefix/ -> /prefix/acasa, taie
-  // trailing slash). Back/forward din browser -> resincronizeaza vederea.
+  // La incarcare: o cale necunoscuta sau cu trailing slash devine ruta canonica.
+  // Back/forward din browser resincronizeaza vederea.
   useEffect(() => {
     const { canonical } = parseRoute(window.location.pathname)
     if (window.location.pathname !== canonical) window.history.replaceState(null, '', canonical)
@@ -97,13 +102,26 @@ export default function App() {
 
   useEffect(() => {
     const load = () => {
-      const token = readToken()
-      if (!token) {
-        setOwnProfileId('')
-        setMissing([])
-        return
-      }
-      fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          const role = data?.account?.role
+          const site = role === 'team' || role === 'jury'
+          writeSignedIn(site)
+          const locked = site && Boolean(data?.account?.archived)
+          setArchived(locked)
+          if (!site || locked) setRepairing(false)
+          if (!site) {
+            setOwnProfileId('')
+            setMissing([])
+          }
+        })
+        .catch(() => {
+          writeSignedIn(false)
+          setArchived(false)
+        })
+      if (!readSignedIn()) return
+      fetch('/api/me/profile', { credentials: 'include' })
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
           setOwnProfileId(data?.id || '')
@@ -125,7 +143,7 @@ export default function App() {
 
   useEffect(() => {
     if (view !== 'platforma' || section !== 'echipa' || !ownProfileId) return
-    const url = profilePath(ownProfileId, window.location.pathname)
+    const url = profilePath(ownProfileId)
     const next = parseRoute(url)
     setRoute(next)
     if (window.location.pathname !== next.canonical) window.history.replaceState(null, '', next.canonical)
@@ -146,17 +164,20 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const onPlatform = view === 'platforma' || onOwnProfile
-  const showGap = onPlatform && missing.length > 0
+  const onPlatform = view === 'platforma' || onOwnProfile || view === 'resurse'
+  const showGap = onPlatform && missing.length > 0 && !archived
+  const showArchive = archived
 
   return (
-    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
+    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap || showArchive ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
       <NavBar
-        items={view === 'platforma' || onOwnProfile ? platformItems : ITEMS}
+        items={onPlatform ? platformItems : ITEMS}
         routing="off"
         active={
-          view === 'platforma' || onOwnProfile
-            ? (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma')
+          onPlatform
+            ? (view === 'resurse'
+              ? '/resurse'
+              : (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma'))
             : view === 'login' ? '/login' : `/${view}`
         }
         onEvent={go}
@@ -169,7 +190,7 @@ export default function App() {
           else sessionStorage.removeItem(RETURN_KEY)
           navigate(view === 'login' ? 'acasa' : 'login')
         }}
-        onPlatform={LANDING.has(view) ? () => navigate('platforma') : undefined}
+        onPlatform={!onPlatform && LANDING.has(view) ? () => navigate('platforma') : undefined}
       />
       {/* Blur full-width: target="page" = fixed pe viewport, 100% latime.
           Navbarul sta deasupra (z 500 vs 150) -> neafectat. */}
@@ -184,13 +205,19 @@ export default function App() {
         opacity={1}
         zIndex={50}
       />
+      {showArchive ? (
+        <p className="platform-gap">
+          <span>Acest cont a fost arhivat deoarece ediția la care s-a înscris s-a încheiat. Creează un cont nou pentru a participa la ediția curentă.</span>
+          <button type="button" className="team-edit" onClick={() => navigate('inscriere')}>înscriere</button>
+        </p>
+      ) : null}
       {showGap ? (
         <p className="platform-gap">
           <span>!!! Lipsesc date obligatorii. Echipa nu va intra în faza de jurizare. !!!</span>
           <button type="button" className="team-edit" onClick={() => setRepairing(true)}>repara acum</button>
         </p>
       ) : null}
-      {repairing ? (
+      {repairing && !archived ? (
         <RepairPanel
           onClose={() => setRepairing(false)}
           onSaved={(nextMissing) => {
@@ -208,7 +235,35 @@ export default function App() {
       ) : view === 'platforma' && section === 'echipa' ? (
         <Echipa />
       ) : view === 'platforma' && section === 'noutati' ? (
-        <Platforma />
+        <Platforma
+          onOpenResources={() => navigate('resurse')}
+          onOpenWork={() => {
+            const land = (id) => {
+              openProfile(id)
+              window.location.hash = 'lucrare'
+            }
+            if (!readSignedIn()) {
+              navigate('login')
+              return
+            }
+            if (ownProfileId) {
+              land(ownProfileId)
+              return
+            }
+            fetch('/api/me/profile', { credentials: 'include' })
+              .then((response) => (response.ok ? response.json() : null))
+              .then((data) => {
+                if (!data?.id) {
+                  writeSignedIn(false)
+                  navigate('login')
+                  return
+                }
+                setOwnProfileId(data.id)
+                land(data.id)
+              })
+              .catch(() => navigate('login'))
+          }}
+        />
       ) : view === 'platforma' ? (
         <main className="page">
           <section className="board" aria-label="galerie" />
@@ -229,7 +284,7 @@ export default function App() {
               navigate('acasa')
               return
             }
-            fetch('/api/me/profile', { headers: { authorization: `Bearer ${readToken()}` } })
+            fetch('/api/me/profile', { credentials: 'include' })
               .then((response) => (response.ok ? response.json() : null))
               .then((data) => {
                 if (!data?.id) {
@@ -248,6 +303,17 @@ export default function App() {
         <Evenimente />
       ) : view === 'editii' ? (
         <Editii onSignup={() => navigate('inscriere')} />
+      ) : view === 'resurse' ? (
+        <Resurse />
+      ) : view === 'contact' ? (
+      <main className="page">
+        <header className="hero">
+          <h1>contact</h1>
+          <p className="lede">
+            <a href="mailto:webtooncnu@gmail.com">webtooncnu@gmail.com</a>
+          </p>
+        </header>
+      </main>
       ) : view !== 'acasa' ? (
       <main className="page">
         <header className="hero">

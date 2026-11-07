@@ -1,8 +1,4 @@
-// Routing minimal pentru hosting static (GitHub Pages): history API +
-// 404.html fallback (vezi workflow-ul deploy-pages.yml). Toate rutele sunt
-// un singur segment: /<prefix>/acasa, /<prefix>/evenimente, ...
-// Prefixul (gol in dev, /webtooncnu-frontend pe Pages) se pastreaza automat,
-// deci nu e hardcodat nicaieri.
+// Rute la radacina domeniului: /acasa, /evenimente, /platforma/galerie, /echipa/<uuid>.
 
 export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'contact', 'platforma', 'login', 'inscriere', 'admin']
 
@@ -16,74 +12,42 @@ export const PLATFORM_ITEMS = [
 const PLATFORM_SECTIONS = new Set(PLATFORM_ITEMS.map((item) => item.section))
 const PROFILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function teamProfileRoute(segs) {
-  const at = segs.indexOf('echipa')
-  if (at === -1) return null
-  const id = segs[at + 1]
-  if (!id || !PROFILE_ID.test(id) || segs.length !== at + 2) return null
-  const prefix = segs.slice(0, at)
-  return {
-    view: 'echipa',
-    section: null,
-    profileId: id,
-    canonical: '/' + [...prefix, 'echipa', id].join('/'),
-  }
+function segments(pathname) {
+  return String(pathname || '/').split('/').filter(Boolean)
 }
 
-function splitPrefix(pathname) {
-  const segs = pathname.split('/').filter(Boolean)
-  const platformAt = segs.indexOf('platforma')
-  if (platformAt !== -1) return { prefix: segs.slice(0, platformAt), last: 'platforma' }
-  const teamAt = segs.indexOf('echipa')
-  const teamId = segs[teamAt + 1]
-  if (teamAt !== -1 && teamId && PROFILE_ID.test(teamId) && segs.length === teamAt + 2) {
-    return { prefix: segs.slice(0, teamAt), last: 'echipa' }
-  }
-  const last = segs[segs.length - 1]
-  if (last !== undefined && VIEWS.includes(last)) return { prefix: segs.slice(0, -1), last }
-  // segment necunoscut sau radacina: prefixul se pastreaza la adancime 0-1,
-  // altfel ultimul segment e considerat gunoi si se inlocuieste
-  if (segs.length > 1) return { prefix: segs.slice(0, -1), last }
-  return { prefix: segs, last }
-}
-
-function platformRoute(segs) {
-  const at = segs.indexOf('platforma')
-  const prefix = segs.slice(0, at)
-  const section = segs[at + 1]
+function platformCanonical(section) {
   const known = section && PLATFORM_SECTIONS.has(section) ? section : 'noutati'
-  const tail = known === 'noutati' ? ['platforma'] : ['platforma', known]
-  return {
-    view: 'platforma',
-    section: known,
-    canonical: '/' + [...prefix, ...tail].join('/'),
-  }
+  return known === 'noutati' ? '/platforma' : `/platforma/${known}`
 }
 
-// -> { view, section, canonical }; canonical e URL-ul normalizat (fara trailing slash)
+// -> { view, section, profileId?, canonical }; canonical e URL-ul normalizat
 export function parseRoute(pathname) {
-  const segs = pathname.split('/').filter(Boolean)
-  const team = teamProfileRoute(segs)
-  if (team) return team
-  if (segs.includes('platforma')) return platformRoute(segs)
-  const { prefix, last } = splitPrefix(pathname)
-  if (last !== undefined && VIEWS.includes(last)) {
-    return { view: last, section: null, canonical: '/' + [...prefix, last].join('/') }
+  const segs = segments(pathname)
+  if (segs[0] === 'echipa' && segs.length === 2 && PROFILE_ID.test(segs[1])) {
+    return {
+      view: 'echipa',
+      section: null,
+      profileId: segs[1],
+      canonical: `/echipa/${segs[1]}`,
+    }
   }
-  return { view: 'acasa', section: null, canonical: '/' + [...prefix, 'acasa'].join('/') }
+  if (segs[0] === 'platforma' && segs.length <= 2) {
+    const section = segs[1] && PLATFORM_SECTIONS.has(segs[1]) ? segs[1] : 'noutati'
+    return { view: 'platforma', section, canonical: platformCanonical(section) }
+  }
+  if (segs.length === 1 && VIEWS.includes(segs[0])) {
+    return { view: segs[0], section: null, canonical: `/${segs[0]}` }
+  }
+  return { view: 'acasa', section: null, canonical: '/acasa' }
 }
 
-export function profilePath(id, pathname) {
-  const { prefix } = splitPrefix(pathname || '/')
-  return '/' + [...prefix, 'echipa', id].join('/')
+export function profilePath(id) {
+  return `/echipa/${id}`
 }
 
-export function canonicalFor(view, pathname, section) {
-  const { prefix } = splitPrefix(pathname)
-  if (view === 'platforma') {
-    const known = section && PLATFORM_SECTIONS.has(section) ? section : 'noutati'
-    const tail = known === 'noutati' ? ['platforma'] : ['platforma', known]
-    return '/' + [...prefix, ...tail].join('/')
-  }
-  return '/' + [...prefix, view].join('/')
+export function canonicalFor(view, section) {
+  if (view === 'platforma') return platformCanonical(section)
+  if (VIEWS.includes(view)) return `/${view}`
+  return '/acasa'
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { readToken, subscribeAuth, subscribeProfile, writeToken } from './session.js'
+import { readSignedIn, subscribeAuth, subscribeProfile, writeSignedIn } from './session.js'
 
 async function readJson(response) {
   const text = await response.text()
@@ -13,19 +13,19 @@ async function readJson(response) {
 }
 
 export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
-  const [token, setToken] = useState(readToken)
+  const [signedIn, setSignedIn] = useState(readSignedIn)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [open, setOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const rootRef = useRef(null)
 
   useEffect(() => {
-    setToken(readToken())
-    return subscribeAuth(() => setToken(readToken()))
+    setSignedIn(readSignedIn())
+    return subscribeAuth(() => setSignedIn(readSignedIn()))
   }, [])
 
   useEffect(() => {
-    if (!token) {
+    if (!signedIn) {
       setAvatarUrl('')
       setOpen(false)
       return undefined
@@ -40,12 +40,12 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
     }
     const load = () => {
       const current = ++generation
-      fetch('/api/me/profile', { headers: { authorization: `Bearer ${token}` } })
+      fetch('/api/me/profile', { credentials: 'include' })
         .then(readJson)
         .then((profile) => {
           if (cancelled || current !== generation) return null
           if (!profile.has_avatar) return null
-          return fetch('/api/me/profile/avatar', { headers: { authorization: `Bearer ${token}` } })
+          return fetch('/api/me/profile/avatar', { credentials: 'include' })
         })
         .then((response) => {
           if (cancelled || current !== generation) return null
@@ -59,7 +59,7 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
         })
         .catch((err) => {
           if (cancelled || current !== generation) return
-          if (err.status === 401) writeToken('')
+          if (err.status === 401) writeSignedIn(false)
           show('')
         })
     }
@@ -71,7 +71,7 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
       stop()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [token])
+  }, [signedIn])
 
   useEffect(() => {
     if (!atTop) setOpen(false)
@@ -95,15 +95,11 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
   }, [open])
 
   const logout = () => {
-    const current = token
     setLeaving(true)
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${current}` },
-    })
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
       .catch(() => {})
       .finally(() => {
-        writeToken('')
+        writeSignedIn(false)
         setLeaving(false)
         setOpen(false)
       })
@@ -111,7 +107,7 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
 
   return (
     <div className={atTop ? 'account-slot' : 'account-slot is-hidden'} ref={rootRef}>
-      {token ? (
+      {signedIn ? (
         <>
           <button
             type="button"
@@ -138,7 +134,7 @@ export default function AccountButton({ atTop, active, onLogin, onPlatform }) {
                 </button>
               ) : null}
               <button type="button" role="menuitem" onClick={logout} disabled={leaving}>
-                ieși
+                Log out
               </button>
             </div>
           ) : null}

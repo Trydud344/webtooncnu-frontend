@@ -1,0 +1,43 @@
+.page.resources-page {
+  max-width: 1120px;
+  width: 100%;
+}
+
+.resources-head h1 {
+  margin-bottom: 0.45rem;
+}
+
+.resources-list {
+  display: grid;
+  gap: 2.25rem;
+  margin-top: 1.75rem;
+}
+
+.resources-item h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.resources-frame {
+  height: clamp(22rem, 62vh, 40rem);
+  border: 1px solid #402426;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #1a1011;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.resources-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+nav-bar .nb-bar:not(:has(.nb-item.active)) .nb-highlight {
+  opacity: 0;
+}

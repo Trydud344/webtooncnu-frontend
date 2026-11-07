@@ -91,6 +91,23 @@ function shiftCursor(cursor, delta) {
 
 const PANELS = [-2, -1, 0, 1, 2]
 
+const ACTIONS = [
+  {
+    title: 'Încarcă lucrarea',
+    text: 'Platforme acceptate: PDF, Canva',
+    id: 'lucrare',
+  },
+  {
+    title: 'Criterii jurizare',
+    text: 'Citește cum poți să îți maximizezi punctajul',
+  },
+  {
+    title: 'Resurse și tutoriale',
+    text: 'Învață cum poți să…',
+    id: 'resurse',
+  },
+]
+
 function MonthGrid({ cursor, today, marks }) {
   const monthName = MONTHS[cursor.month - 1]
   const cells = monthCells(cursor.year, cursor.month)
@@ -144,7 +161,7 @@ function Chevron({ dir }) {
   )
 }
 
-export default function ContestCalendar() {
+export default function ContestCalendar({ onOpenResources, onOpenWork }) {
   const today = useMemo(() => civilBucharest(new Date()), [])
   const [cursor, setCursor] = useState(() => ({ year: today.year, month: today.month }))
   const [edition, setEdition] = useState(null)
@@ -273,6 +290,19 @@ export default function ContestCalendar() {
           )}
         </p>
       ) : null}
+      <div className="contest-cal__actions">
+        {ACTIONS.map((action) => (
+          <button
+            key={action.title}
+            type="button"
+            className="contest-cal__action"
+            onClick={action.id === 'resurse' ? onOpenResources : action.id === 'lucrare' ? onOpenWork : undefined}
+          >
+            <span className="contest-cal__action-title">{action.title}</span>
+            <span className="contest-cal__action-text">{action.text}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
