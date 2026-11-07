@@ -16,7 +16,9 @@ USER root
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf proxy-api.conf /etc/nginx/
 COPY --from=build /app/dist /usr/share/nginx/html
-RUN nginx -t
+RUN nginx -t \
+    && rm -f /tmp/nginx.pid \
+    && chown -R nginx:nginx /tmp
 USER nginx
 
 EXPOSE 8080
