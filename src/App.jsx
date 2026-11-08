@@ -31,6 +31,7 @@ export default function App() {
   const [missing, setMissing] = useState([])
   const [archived, setArchived] = useState(false)
   const [repairing, setRepairing] = useState(false)
+  const [holdPlatformNav, setHoldPlatformNav] = useState(false)
   const view = route.view
   const section = route.section
   const onOwnProfile = view === 'echipa' && Boolean(ownProfileId) && route.profileId === ownProfileId
@@ -65,7 +66,7 @@ export default function App() {
         return
       }
       if (!readSignedIn()) {
-        navigate('login')
+        openLogin()
         return
       }
       fetch('/api/me/profile', { credentials: 'include' })
@@ -73,7 +74,7 @@ export default function App() {
         .then((data) => {
           if (!data?.id) {
             writeSignedIn(false)
-            navigate('login')
+            openLogin()
             return
           }
           setOwnProfileId(data.id)
@@ -151,6 +152,10 @@ export default function App() {
   }, [view, section, ownProfileId])
 
   useEffect(() => {
+    if (view !== 'login') setHoldPlatformNav(false)
+  }, [view])
+
+  useEffect(() => {
     window.scrollTo(0, 0)
   }, [view])
 
@@ -166,20 +171,27 @@ export default function App() {
   }, [])
 
   const onPlatform = view === 'platforma' || onOwnProfile || view === 'resurse'
+  const platformNav = onPlatform || (view === 'login' && holdPlatformNav)
+  const openLogin = () => {
+    setHoldPlatformNav(onPlatform)
+    navigate('login')
+  }
   const showGap = onPlatform && missing.length > 0 && !archived
   const showArchive = archived
 
   return (
     <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap || showArchive ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
       <NavBar
-        items={onPlatform ? platformItems : ITEMS}
+        items={platformNav ? platformItems : ITEMS}
         routing="off"
         active={
-          onPlatform
-            ? (view === 'resurse'
-              ? '/resurse'
-              : (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma'))
-            : view === 'login' ? '/login' : `/${view}`
+          view === 'login'
+            ? '/login'
+            : platformNav
+              ? (view === 'resurse'
+                ? '/resurse'
+                : (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma'))
+              : `/${view}`
         }
         onEvent={go}
       />
@@ -189,9 +201,14 @@ export default function App() {
         onLogin={() => {
           if (view === 'echipa') sessionStorage.setItem(RETURN_KEY, window.location.pathname)
           else sessionStorage.removeItem(RETURN_KEY)
-          navigate(view === 'login' ? 'acasa' : 'login')
+          if (view === 'login') {
+            setHoldPlatformNav(false)
+            navigate('acasa')
+            return
+          }
+          openLogin()
         }}
-        onPlatform={!onPlatform && LANDING.has(view) ? () => navigate('platforma') : undefined}
+        onPlatform={!platformNav && LANDING.has(view) ? () => navigate('platforma') : undefined}
       />
       {/* Blur full-width: target="page" = fixed pe viewport, 100% latime.
           Navbarul sta deasupra (z 500 vs 150) -> neafectat. */}
@@ -244,7 +261,7 @@ export default function App() {
               window.location.hash = 'lucrare'
             }
             if (!readSignedIn()) {
-              navigate('login')
+              openLogin()
               return
             }
             if (ownProfileId) {
@@ -256,13 +273,13 @@ export default function App() {
               .then((data) => {
                 if (!data?.id) {
                   writeSignedIn(false)
-                  navigate('login')
+                  openLogin()
                   return
                 }
                 setOwnProfileId(data.id)
                 land(data.id)
               })
-              .catch(() => navigate('login'))
+              .catch(() => openLogin())
           }}
         />
       ) : view === 'platforma' ? (
