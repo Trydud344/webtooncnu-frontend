@@ -771,6 +771,140 @@ body nav-bar .nb-highlight {
   border-top: 1px solid var(--line);
 }
 
+/* înscriere: same underline form, with room to read */
+.signup-page {
+  padding-inline: 1.25rem;
+}
+
+.signup-form {
+  color-scheme: dark;
+  gap: 1.75rem;
+  max-width: 62ch;
+}
+
+.signup-form h2 {
+  margin: 2.5rem 0 0;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+  font-size: 1.75rem;
+  line-height: 1.45;
+}
+
+.signup-form h2:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.signup-form h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.45;
+  color: var(--heading);
+}
+
+.signup-form .field {
+  gap: 0.55rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.signup-form .field > span {
+  color: var(--heading);
+}
+
+.signup-form .field input,
+.signup-form .field select {
+  font-size: 1.125rem;
+  line-height: 1.4;
+  min-height: 44px;
+  padding: 0.4rem 0.1rem 0.45rem;
+}
+
+.signup-form .field input::placeholder {
+  color: rgba(244, 240, 240, 0.72);
+}
+
+.signup-form .field input:focus-visible,
+.signup-form .field select:focus-visible,
+.signup-form .text-btn:focus-visible,
+.signup-form .check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.signup-form .form-note {
+  margin: -0.35rem 0 0;
+  max-width: 58ch;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.signup-form .person {
+  gap: 1.35rem;
+  margin-top: 0.35rem;
+  padding: 1.75rem 0 0.25rem;
+}
+
+.signup-form .person + .person {
+  margin-top: 0.5rem;
+}
+
+.signup-form .person > .text-btn {
+  justify-self: start;
+  min-height: 44px;
+}
+
+.signup-form .agreements {
+  display: grid;
+  gap: 1.15rem;
+  margin-top: 0.5rem;
+}
+
+.signup-form .check {
+  gap: 0.9rem;
+  align-items: flex-start;
+  min-height: 44px;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.signup-form .check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.signup-form .form-error {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.signup-form .actions {
+  gap: 2rem;
+  margin-top: 0.75rem;
+}
+
+.signup-form .text-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.signup-form .text-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (min-width: 768px) {
+  .signup-page {
+    padding-inline: 1.5rem;
+  }
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
