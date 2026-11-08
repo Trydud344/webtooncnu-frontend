@@ -159,7 +159,7 @@ export default function Inscriere({ onBack }) {
 
   if (done) {
     return (
-      <main className="page">
+      <main className="page signup-page">
         <header className="hero">
           <h1>cont creat</h1>
           <p className="lede">
@@ -176,7 +176,7 @@ export default function Inscriere({ onBack }) {
   }
 
   return (
-    <main className="page">
+    <main className="page signup-page">
       <header className="hero">
         <h1>creează cont</h1>
         <p className="lede">
@@ -188,7 +188,7 @@ export default function Inscriere({ onBack }) {
 
       <section>
         {loadError ? <p className="form-error">{loadError}</p> : null}
-        <form className="form wide" onSubmit={submit}>
+        <form className="form wide signup-form" onSubmit={submit}>
           <h2>cont</h2>
           <label className="field">
             <span>email</span>
@@ -247,11 +247,10 @@ export default function Inscriere({ onBack }) {
           </label>
 
           <h2>membri</h2>
-          <p>
-            <small>Între 2 și 6 elevi. Nume, unitate, localitate și clasă.</small>
-          </p>
+          <p className="form-note">Între 2 și 6 elevi. Nume, unitate, localitate și clasă.</p>
           {members.map((member, index) => (
             <div className="person" key={index}>
+              <h3>membru {index + 1}</h3>
               <label className="field">
                 <span>nume și prenume</span>
                 <input
@@ -302,11 +301,10 @@ export default function Inscriere({ onBack }) {
           ) : null}
 
           <h2>coordonatori</h2>
-          <p>
-            <small>Unul sau doi profesori.</small>
-          </p>
+          <p className="form-note">Unul sau doi profesori.</p>
           {coordinators.map((coordinator, index) => (
             <div className="person" key={index}>
+              <h3>coordonator {index + 1}</h3>
               <label className="field">
                 <span>nume și prenume</span>
                 <input
@@ -354,16 +352,18 @@ export default function Inscriere({ onBack }) {
             </button>
           ) : null}
 
-          <label className="check">
-            <input type="checkbox" name="gdpr" required />
-            <span>Sunt de acord cu prelucrarea datelor pentru înscrierea în concurs.</span>
-          </label>
-          <label className="check">
-            <input type="checkbox" name="partnership" required />
-            <span>Confirm că unitatea participă pe baza parteneriatului cu organizatorul.</span>
-          </label>
+          <div className="agreements">
+            <label className="check">
+              <input type="checkbox" name="gdpr" required />
+              <span>Sunt de acord cu prelucrarea datelor pentru înscrierea în concurs.</span>
+            </label>
+            <label className="check">
+              <input type="checkbox" name="partnership" required />
+              <span>Confirm că unitatea participă pe baza parteneriatului cu organizatorul.</span>
+            </label>
+          </div>
 
-          {error ? <p className="form-error">{error}</p> : null}
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <div className="turnstile-group">
             <div ref={signupCheck.containerRef} className="turnstile" />
             <div ref={loginCheck.containerRef} className="turnstile" />
