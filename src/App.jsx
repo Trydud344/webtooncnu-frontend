@@ -9,6 +9,7 @@ import Platforma from './pages/Platforma.jsx'
 import Echipa from './pages/Echipa.jsx'
 import Evenimente from './pages/Evenimente.jsx'
 import Editii from './pages/Editii.jsx'
+import Acasa from './pages/Acasa.jsx'
 import Resurse from './pages/Resurse.jsx'
 import AccountButton from './AccountButton.jsx'
 import RepairPanel from './components/RepairPanel.jsx'
@@ -325,145 +326,7 @@ export default function App() {
         </header>
       </main>
       ) : (
-      <main className="page">
-        <header className="hero hero-centered">
-          <h1 className="logo-title"><img src={`${import.meta.env.BASE_URL}logo-v2.png`} alt="WEBTOON CNU" /></h1>
-          <p className="lede">
-            Locul în care tehnologia se întâlnește cu creativitatea.
-          </p>
-          <p className="lede">
-            WebToonCNU este mai mult decât un proiect de benzi desenate — este o călătorie
-            în lumea creativității și a liberei exprimări. Invităm artiști de orice nivel
-            să construiască împreună o comunitate vibrantă, plină de imaginație.
-          </p>
-          <p>
-            <em>Tema ediției: „Ecaterina Teodoroiu, emblema spiritului național”.</em>
-          </p>
-          <p>
-            <small>
-              1 octombrie 2025 – 30 iunie 2026 · termen trimitere lucrări: 1 iunie 2026 ·{' '}
-              <a href="mailto:contact@cnutoons.com">contact@cnutoons.com</a>
-            </small>
-          </p>
-          <div className="actions">
-            <button type="button" className="text-btn" onClick={() => navigate('inscriere')}>înscriere</button>
-            <a className="text-btn" href="#regulament">regulament</a>
-            <a className="text-btn" href="#parteneriat">parteneriat</a>
-          </div>
-        </header>
-
-        <section>
-          <h2>despre</h2>
-          <p>
-            WebToonCNU oferă un mediu virtual prietenos și deschis, unde participanții își
-            exprimă imaginația și creează benzi desenate captivante. Prin acest proiect
-            încurajăm creativitatea, promovăm gândirea critică și celebrăm diversitatea
-            artistică.
-          </p>
-          <p>
-            Concursul este organizat de Centrul Județean de Excelență Vrancea împreună cu
-            Colegiul Național „Unirea”, Focșani. Haideți să creăm împreună și să aducem la
-            viață povești care vor rămâne în inimile noastre.
-          </p>
-          <p>
-            <small>stil · creativitate · simplitate · sentimente · natură · concurență</small>
-          </p>
-        </section>
-
-        <section>
-          <h2>ce creezi</h2>
-          <p>Fiecare echipă realizează două lucruri:</p>
-          <p>
-            <strong>1. un webtoon.</strong> Titlul webtoon-ului este numele echipei.
-            Se publică pe webtoons.com, la 800 × 1280 px, cu un scurt sinopsis la început.
-            Episodul 1 în română, episodul 2 tradus în engleză sau franceză. Scenariul
-            pornește de la tema ediției și de la o referință autentică — bibliografie,
-            reportaj, articol, memorii, mărturie contemporană, film — citată la final.
-          </p>
-          <p>
-            <strong>2. un film de prezentare, de maximum 2 minute.</strong> Conține
-            prezentarea tuturor membrilor prin fotografie și avatar, rolurile fiecăruia
-            și coperta webtoon-ului.
-          </p>
-        </section>
-
-        <section>
-          <h2>secțiuni</h2>
-          <p>Două secțiuni de vârstă, fiecare cu trei subsecțiuni:</p>
-          <ul>
-            <li>
-              <strong>liceu / gimnaziu — clasic:</strong> desen digital pe tabletă
-              grafică sau desen pe hârtie, scanat.
-            </li>
-            <li>
-              <strong>liceu / gimnaziu — proIA:</strong> desene asistate de inteligența
-              artificială, dar produsul final nu poate fi 100% AI.
-            </li>
-            <li>
-              <strong>liceu / gimnaziu — nonIA:</strong> desen cu aplicații pe bază de
-              forme și imagini predefinite, fără AI.
-            </li>
-          </ul>
-          <p>
-            <small>Echipe de 2–6 elevi, îndrumați de maximum 2 profesori coordonatori,
-            chiar și din școli sau discipline diferite.</small>
-          </p>
-        </section>
-
-        <section>
-          <h2>jurizare</h2>
-          <p>400 de puncte, în patru părți egale:</p>
-          <ul>
-            <li>100 — calitatea scenariului</li>
-            <li>100 — aspectul grafic</li>
-            <li>100 — calitatea traducerii în engleză / franceză</li>
-            <li>100 — calitatea filmului de prezentare</li>
-          </ul>
-        </section>
-
-        <section id="inscriere">
-          <h2>participare</h2>
-          <p id="regulament">
-            Înscrierea se face prin formularul oficial, cu anexa 1 completată pentru toți
-            membrii echipei. Regulamentul complet al ediției a IV-a descrie condițiile,
-            criteriile și calendarul.
-          </p>
-          <p id="parteneriat">
-            Participarea școlilor se face pe bază de parteneriat semnat cu Centrul
-            Județean de Excelență Vrancea, după modelul publicat pe site. Toți
-            participanții primesc adeverințe, iar câștigătorii — diplome.
-          </p>
-          <p>
-            <small>
-              înscriere · regulament · parteneriat — linkurile oficiale rămân cele de pe
-              site-ul actual, până la mutarea completă pe platforma nouă.
-            </small>
-          </p>
-        </section>
-
-        <section>
-          <h2>ediții</h2>
-          <p>
-            Ediția I, ediția a II-a, ediția a III-a — arhivă pe site-ul actual.
-            Ediția a IV-a, 2025–2026, este ediția curentă.
-          </p>
-          <p>
-            <small>
-              Platforma nouă va aduna toate materialele pe ediții: lucrări, evenimente,
-              resurse, portrete de artiști, galerie.
-            </small>
-          </p>
-        </section>
-
-        <section>
-          <h2>contact</h2>
-          <p>
-            <a href="mailto:contact@cnutoons.com">contact@cnutoons.com</a>
-            <br />
-            <small>WebToonCNU · cnutoons.com · youtube</small>
-          </p>
-        </section>
-      </main>
+        <Acasa onSignup={() => navigate('inscriere')} />
       )}
       </div>
     </div>
