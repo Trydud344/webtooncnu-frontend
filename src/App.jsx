@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import NavBar from '../navbarting/wrappers/NavBar.jsx'
 import '../navbarting/nav-bar.css'
+import MobileNav, { useNarrow } from './components/MobileNav.jsx'
 import GradualBlur from './components/GradualBlur.jsx'
 import Login from './Login.jsx'
 import Inscriere from './pages/Inscriere.jsx'
@@ -172,6 +173,15 @@ export default function App() {
 
   const onPlatform = view === 'platforma' || onOwnProfile || view === 'resurse'
   const platformNav = onPlatform || (view === 'login' && holdPlatformNav)
+  const narrow = useNarrow()
+  const navItems = platformNav ? platformItems : ITEMS
+  const navActive = view === 'login'
+    ? '/login'
+    : platformNav
+      ? (view === 'resurse'
+        ? '/resurse'
+        : (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma'))
+      : `/${view}`
   const openLogin = () => {
     setHoldPlatformNav(onPlatform)
     navigate('login')
@@ -181,20 +191,16 @@ export default function App() {
 
   return (
     <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap || showArchive ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
-      <NavBar
-        items={platformNav ? platformItems : ITEMS}
-        routing="off"
-        active={
-          view === 'login'
-            ? '/login'
-            : platformNav
-              ? (view === 'resurse'
-                ? '/resurse'
-                : (platformItems.find((item) => item.section === (onOwnProfile ? 'echipa' : section))?.href || '/platforma'))
-              : `/${view}`
-        }
-        onEvent={go}
-      />
+      {narrow ? (
+        <MobileNav items={navItems} active={navActive} onEvent={go} />
+      ) : (
+        <NavBar
+          items={navItems}
+          routing="off"
+          active={navActive}
+          onEvent={go}
+        />
+      )}
       <AccountButton
         atTop={atTop}
         active={view === 'login'}

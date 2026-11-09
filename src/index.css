@@ -70,7 +70,7 @@ body nav-bar {
 .account-slot {
   position: fixed;
   top: 24px;
-  right: 24px;
+  right: max(24px, env(safe-area-inset-right));
   z-index: 500;
   transition: opacity 0.3s ease;
 }
@@ -330,6 +330,134 @@ body nav-bar .nb-highlight {
 
 .team-shell .login-btn:hover {
   background-color: #3a3a3a;
+}
+
+/* Sub 900px pilula desktop se suprapune cu log in. Meniul mobil e o lista
+   suprapusa, fara sa impinga continutul. */
+.mobile-nav {
+  position: sticky;
+  top: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-start;
+  padding: 24px max(24px, env(safe-area-inset-right)) 12px max(24px, env(safe-area-inset-left));
+  touch-action: manipulation;
+  pointer-events: none;
+}
+
+.team-shell .mobile-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.mobile-nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: #ffffff;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mobile-nav-toggle svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+.mobile-nav-toggle:hover {
+  background: #3a1d1f;
+}
+
+.team-shell .mobile-nav-toggle:hover {
+  background: #3a3a3a;
+}
+
+.mobile-nav-toggle:active {
+  opacity: 0.72;
+}
+
+.mobile-nav-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.mobile-nav-panel {
+  position: absolute;
+  top: 100%;
+  left: max(24px, env(safe-area-inset-left));
+  right: max(24px, env(safe-area-inset-right));
+  z-index: 1;
+  width: auto;
+  max-height: min(70dvh, calc(100dvh - 8rem));
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  background: var(--surface);
+  border-radius: 22px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+  animation: mobile-nav-in 160ms ease-out;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-link.is-active {
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.mobile-nav-link:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.mobile-nav-link:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
+}
+
+@keyframes mobile-nav-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .team-page {
@@ -1274,7 +1402,8 @@ section.flush {
     transition: none;
   }
 
-  .account-menu {
+  .account-menu,
+  .mobile-nav-panel {
     animation: none;
   }
 
