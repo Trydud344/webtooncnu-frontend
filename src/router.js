@@ -4,7 +4,7 @@ export const VIEWS = ['acasa', 'evenimente', 'editii', 'galerie', 'resurse', 'co
 
 // Navbarul platformei. noutati sta pe /platforma, ca sa ramana endpointul existent.
 export const PLATFORM_ITEMS = [
-  { label: 'noutati', href: '/platforma', section: 'noutati' },
+  { label: 'acasa', href: '/platforma', section: 'noutati' },
   { label: 'galerie', href: '/platforma/galerie', section: 'galerie' },
   { label: 'echipa mea', href: '/platforma/echipa', section: 'echipa' },
 ]
