@@ -21,6 +21,14 @@ const ITEMS = VIEWS.filter((v) => v !== 'login' && v !== 'inscriere' && v !== 'a
 const LANDING = new Set(ITEMS.map((item) => item.label))
 const RETURN_KEY = 'wtc_return'
 
+function resurseHistory(fromPlatform) {
+  return { resurseFrom: fromPlatform ? 'platform' : 'landing' }
+}
+
+function resurseOpenedFromPlatform() {
+  return window.history.state?.resurseFrom === 'platform'
+}
+
 export default function App() {
   // Butonul log in e vizibil doar la varful paginii (scrollY ~ 0).
   // Legat de pozitia de scroll, NU de hover-ul navbarului — ca sa nu intre in loop cu el.
@@ -49,10 +57,11 @@ export default function App() {
     if (window.location.pathname !== next.canonical) window.history.pushState(null, '', next.canonical)
   }
 
-  const navigate = (next, nextSection) => {
+  const navigate = (next, nextSection, historyState = null) => {
     const url = canonicalFor(next, nextSection)
+    if (window.location.pathname !== url) window.history.pushState(historyState, '', url)
+    else if (historyState) window.history.replaceState(historyState, '', url)
     setRoute(parseRoute(url))
-    if (window.location.pathname !== url) window.history.pushState(null, '', url)
   }
 
   const go = (detail) => {
@@ -85,6 +94,10 @@ export default function App() {
       return
     }
     const next = parseRoute(href)
+    if (next.view === 'resurse') {
+      navigate('resurse', null, resurseHistory(platformNav))
+      return
+    }
     if (next.view === 'echipa' && next.profileId) {
       setRoute(next)
       if (window.location.pathname !== next.canonical) window.history.pushState(null, '', next.canonical)
@@ -97,7 +110,7 @@ export default function App() {
   // Back/forward din browser resincronizeaza vederea.
   useEffect(() => {
     const { canonical } = parseRoute(window.location.pathname)
-    if (window.location.pathname !== canonical) window.history.replaceState(null, '', canonical)
+    if (window.location.pathname !== canonical) window.history.replaceState(window.history.state, '', canonical)
     const onPop = () => setRoute(parseRoute(window.location.pathname))
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -171,7 +184,7 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const onPlatform = view === 'platforma' || onOwnProfile || view === 'resurse'
+  const onPlatform = view === 'platforma' || onOwnProfile || (view === 'resurse' && resurseOpenedFromPlatform())
   const platformNav = onPlatform || (view === 'login' && holdPlatformNav)
   const narrow = useNarrow()
   const navItems = platformNav ? platformItems : ITEMS
@@ -260,7 +273,7 @@ export default function App() {
         <Echipa />
       ) : view === 'platforma' && section === 'noutati' ? (
         <Platforma
-          onOpenResources={() => navigate('resurse')}
+          onOpenResources={() => navigate('resurse', null, resurseHistory(true))}
           onOpenWork={() => {
             const land = (id) => {
               openProfile(id)
