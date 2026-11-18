@@ -1422,6 +1422,32 @@ section.flush {
   margin: 0 0 1.5rem;
 }
 
+.masonry a {
+  position: relative;
+  display: block;
+  border-radius: 16px;
+  color: inherit;
+}
+
+.masonry a:hover {
+  background: none;
+  color: inherit;
+}
+
+.masonry a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* locul pozei sta ocupat; fotografia intra peste skeleton, apoi osul dispare */
+.masonry-skeleton {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  color: var(--ink);
+  pointer-events: none;
+}
+
 /* prima coperta iese din ritm: latime plina, format panoramic */
 .masonry figure:first-child {
   column-span: all;
@@ -1432,11 +1458,25 @@ section.flush {
 }
 
 .masonry img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: auto;
   display: block;
-  border-radius: 16px;
+  border-radius: inherit;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 280ms ease-out;
+}
+
+.masonry figure.is-ready img {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .masonry img {
+    transition: none;
+  }
 }
 
 /* ritm editorial: formate alternate pentru restul */
