@@ -21,7 +21,7 @@ const COLUMNS = [
     ],
   },
   {
-    title: 'platforma',
+    title: 'platformă',
     links: [
       { label: 'anunțuri', href: '/platforma' },
       { label: 'galerie', href: '/platforma/galerie' },

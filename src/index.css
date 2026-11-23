@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "OpenCode Complete";
+  src: url("./assets/fonts/OpenCode-Complete.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenCode Complete Ext";
+  src: url("./assets/fonts/OpenCode-Complete-Ext.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -13,6 +29,7 @@
   --heading: #fff4f4;
   --dark: #5e0707;
   --line: rgba(255, 215, 217, 0.25);
+  --font-pixel: "OpenCode Complete", "OpenCode Complete Ext", "FreeSans", "Helvetica Neue", Arial, sans-serif;
 }
 
 html {
@@ -1347,21 +1364,22 @@ h1,
 h2,
 h3,
 .silkscreen {
-  font-family: "Silkscreen", sans-serif;
-  font-weight: 700;
+  font-family: var(--font-pixel);
+  font-weight: 400;
   font-style: normal;
+  font-synthesis: none;
 }
 
 h1 {
   font-size: clamp(2.5rem, 6vw, 4rem);
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
   margin: 0.5rem 0 1rem;
 }
 
 h2 {
-  font-size: 1.4rem;
-  line-height: 1.2;
+  font-size: 1.55rem;
+  line-height: 1.25;
   margin: 0 0 0.75rem;
 }
 

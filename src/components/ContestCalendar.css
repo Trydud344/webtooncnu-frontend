@@ -162,10 +162,11 @@
 .contest-cal__month {
   margin: 0.95rem 0 0;
   text-align: center;
-  font-family: "Silkscreen", sans-serif;
-  font-weight: 700;
-  font-size: clamp(1.8rem, 4.2vw, 2.6rem);
-  line-height: 1.1;
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  font-synthesis: none;
+  font-size: clamp(1.9rem, 4.4vw, 2.75rem);
+  line-height: 1.15;
   color: var(--heading);
 }
 
@@ -229,9 +230,10 @@
 }
 
 .contest-cal__action-title {
-  font-family: "Silkscreen", sans-serif;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-family: var(--font-pixel);
+  font-size: 1.25rem;
+  font-weight: 400;
+  font-synthesis: none;
   line-height: 1.35;
   color: var(--heading);
 }

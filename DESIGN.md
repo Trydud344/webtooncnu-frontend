@@ -16,7 +16,7 @@ No other colors. No gradients. No shadows.
 
 ## Type
 
-- Display / headings: `Silkscreen, sans-serif`, 700. `h1: clamp(2.5rem, 6vw, 4rem)`, `h2: 1.4rem` lowercase.
+- Display / headings: `OpenCode Complete, sans-serif`, 400. `h1: clamp(2.5rem, 6vw, 4rem)`, `h2: 1.55rem` lowercase.
 - Body: `FreeSans, Helvetica Neue, Arial, sans-serif`, `1rem / 1.6`. Lede: `1.125rem / 1.6, max 60ch`.
 - Logo: pixel image, `width: min(100%, 576px)`, `image-rendering: pixelated`. No text-shadow, no styling.
 
