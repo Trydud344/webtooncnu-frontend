@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import NavBar from '../navbarting/wrappers/NavBar.jsx'
 import '../navbarting/nav-bar.css'
 import MobileNav, { useNarrow } from './components/MobileNav.jsx'
 import GradualBlur from './components/GradualBlur.jsx'
+import SiteFooter from './components/SiteFooter.jsx'
 import Login from './Login.jsx'
 import Inscriere from './pages/Inscriere.jsx'
 import Admin from './pages/Admin.jsx'
@@ -41,9 +42,11 @@ export default function App() {
   const [archived, setArchived] = useState(false)
   const [repairing, setRepairing] = useState(false)
   const [holdPlatformNav, setHoldPlatformNav] = useState(false)
+  const pendingHashRef = useRef('')
   const view = route.view
   const section = route.section
   const onOwnProfile = view === 'echipa' && Boolean(ownProfileId) && route.profileId === ownProfileId
+  const isProfileViewer = view === 'echipa' || (view === 'platforma' && section === 'echipa')
   const platformItems = useMemo(() => PLATFORM_ITEMS.map((item) => (
     item.section === 'echipa' && ownProfileId
       ? { ...item, href: profilePath(ownProfileId) }
@@ -70,7 +73,12 @@ export default function App() {
       navigate('acasa')
       return
     }
-    if (href === '/platforma/echipa') {
+    const [rawPath, hash] = href.split('#')
+    if (rawPath === '/login') {
+      openLogin()
+      return
+    }
+    if (rawPath === '/platforma/echipa') {
       if (ownProfileId) {
         openProfile(ownProfileId)
         return
@@ -93,7 +101,19 @@ export default function App() {
         .catch(() => {})
       return
     }
-    const next = parseRoute(href)
+    const next = parseRoute(rawPath)
+    if (hash) {
+      if (next.canonical === route.canonical) {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        document.getElementById(hash)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })
+        return
+      }
+      pendingHashRef.current = hash
+    } else if (next.canonical === route.canonical) {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+      return
+    }
     if (next.view === 'resurse') {
       navigate('resurse', null, resurseHistory(platformNav))
       return
@@ -170,8 +190,17 @@ export default function App() {
   }, [view])
 
   useEffect(() => {
+    const hash = pendingHashRef.current
+    if (hash) {
+      pendingHashRef.current = ''
+      const id = window.requestAnimationFrame(() => {
+        document.getElementById(hash)?.scrollIntoView()
+      })
+      return () => window.cancelAnimationFrame(id)
+    }
     window.scrollTo(0, 0)
-  }, [view])
+    return undefined
+  }, [view, section])
 
   useEffect(() => {
     document.title = 'WebToonCNU — Concurs interjudetean de benzi desenate'
@@ -203,7 +232,7 @@ export default function App() {
   const showArchive = archived
 
   return (
-    <div className={['', view === 'login' ? 'no-nav-highlight' : '', (view === 'platforma' && section === 'echipa') || view === 'echipa' ? 'team-shell' : '', showGap || showArchive ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
+    <div className={[isProfileViewer ? 'team-shell' : 'app-shell', view === 'login' ? 'no-nav-highlight' : '', showGap || showArchive ? 'has-gap' : ''].filter(Boolean).join(' ') || undefined}>
       {narrow ? (
         <MobileNav items={navItems} active={navActive} onEvent={go} />
       ) : (
@@ -365,6 +394,12 @@ export default function App() {
         <Acasa onSignup={() => navigate('inscriere')} />
       )}
       </div>
+      {!isProfileViewer ? (
+        <SiteFooter
+          activeHref={route.canonical}
+          onNavigate={(href) => go({ href })}
+        />
+      ) : null}
     </div>
   )
 }

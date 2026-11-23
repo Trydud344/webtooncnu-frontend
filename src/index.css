@@ -57,6 +57,16 @@ body nav-bar {
   isolation: isolate;
 }
 
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell > .view-enter {
+  flex: 1 0 auto;
+}
+
 .page {
   position: relative;
   max-width: 90ch;
